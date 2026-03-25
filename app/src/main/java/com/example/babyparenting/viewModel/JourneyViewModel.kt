@@ -95,7 +95,13 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
     // ── Subscription helpers ──────────────────────────────────────────────────
 
     fun canAccessAdvice(): Boolean = subscriptionManager.canAccessAdvice()
-    fun getDaysRemaining(): Int    = subscriptionManager.daysRemaining()
+    fun getDaysRemaining(): Int {
+        return when {
+            subscriptionManager.isSubscriptionActive() -> subscriptionManager.subscriptionDaysRemaining()
+            subscriptionManager.isTrialActive()        -> subscriptionManager.trialDaysRemaining()
+            else                                       -> 0
+        }
+    }
     fun refreshSubscriptionStatus() {
         _subscriptionStatus.value = subscriptionManager.getStatus()
     }

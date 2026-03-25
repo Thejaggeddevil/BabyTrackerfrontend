@@ -20,8 +20,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
@@ -55,9 +57,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.babyparenting.ui.theme.LocalAppColors
 
+// ── Fixed readable colors (not dependent on dark gradient background) ─────────
+private val LoginBg1     = Color(0xFFFFF0E6)
+private val LoginBg2     = Color(0xFFFFE4D0)
+private val LoginBg3     = Color(0xFFF5F0EB)
+private val LoginText    = Color(0xFF2D1B0E)   // Dark brown — always readable
+private val LoginMuted   = Color(0xFF7A5C4A)
+private val LoginSurface = Color(0xFFFFFFFF)
+private val LoginCoral   = Color(0xFFFF8B94)
+private val LoginPeach   = Color(0xFFFFB06A)
+private val LoginLavender= Color(0xFF9B8FD4)
+private val LoginBorder  = Color(0xFFE0C8BC)
+private val LoginRed     = Color(0xFFE53935)
+private val LoginSubtle  = Color(0xFF5C3D2E)
+
 @Composable
 fun LoginScreen(
-    onParentLogin: () -> Unit,   // → AuthScreen (Login/Register)
+    onParentLogin: () -> Unit,
     onAdminLogin: (password: String) -> Boolean
 ) {
     var showAdminForm by remember { mutableStateOf(false) }
@@ -73,20 +89,20 @@ fun LoginScreen(
         pageAlpha.animateTo(1f, tween(400))
     }
 
+    // Light warm gradient — text is always visible on this
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF1E1B30), Color(0xFF221F34), LocalAppColors.current.bgMain)
-                )
+                Brush.verticalGradient(listOf(LoginBg1, LoginBg2, LoginBg3))
             )
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
         Column(
-            modifier            = Modifier
+            modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 28.dp, vertical = 32.dp)
                 .alpha(pageAlpha.value),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -100,27 +116,26 @@ fun LoginScreen(
                     .scale(logoScale.value)
                     .clip(CircleShape)
                     .background(
-                        Brush.linearGradient(
-                            listOf(LocalAppColors.current.coral, LocalAppColors.current.peach)
-                        )
+                        Brush.linearGradient(listOf(LoginCoral, LoginPeach))
                     )
             ) {
                 Text("👶", fontSize = 38.sp)
             }
 
             Spacer(Modifier.height(22.dp))
+
             Text(
                 "Baby Parenting Companion",
                 fontSize   = 22.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color      = LocalAppColors.current.textPrimary,
+                color      = LoginText,        // ← dark brown, always visible
                 textAlign  = TextAlign.Center
             )
             Spacer(Modifier.height(6.dp))
             Text(
                 "Track every milestone with love",
                 fontSize  = 13.sp,
-                color     = LocalAppColors.current.textSecondary,
+                color     = LoginMuted,        // ← muted brown, always visible
                 textAlign = TextAlign.Center
             )
 
@@ -132,26 +147,52 @@ fun LoginScreen(
                     "Who is using the app?",
                     fontSize   = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color      = LocalAppColors.current.textSecondary
+                    color      = LoginMuted
                 )
                 Spacer(Modifier.height(20.dp))
 
-                // "I'm a Parent" → AuthScreen
                 RoleCard(
                     emoji       = "👨‍👩‍👧",
                     title       = "I'm a Parent",
                     subtitle    = "Track my child's milestones",
-                    accentColor = LocalAppColors.current.coral,
-                    onClick     = onParentLogin   // ← goes to AuthScreen
+                    accentColor = LoginCoral,
+                    onClick     = onParentLogin
                 )
                 Spacer(Modifier.height(14.dp))
                 RoleCard(
                     emoji       = "🛡️",
                     title       = "Admin Login",
                     subtitle    = "Manage & add milestones",
-                    accentColor = LocalAppColors.current.lavender,
+                    accentColor = LoginLavender,
                     onClick     = { showAdminForm = true }
                 )
+
+                Spacer(Modifier.height(32.dp))
+
+                // Free trial badge
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(LoginCoral.copy(alpha = 0.10f))
+                        .border(1.dp, LoginCoral.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("🎁 ", fontSize = 16.sp)
+                        Text(
+                            "14 days FREE — No payment needed to start!",
+                            fontSize   = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color      = LoginSubtle,
+                            textAlign  = TextAlign.Center
+                        )
+                    }
+                }
 
             } else {
                 // ── Admin password form ───────────────────────────────────────
@@ -159,7 +200,7 @@ fun LoginScreen(
                     Modifier
                         .size(60.dp)
                         .clip(CircleShape)
-                        .background(LocalAppColors.current.lavender),
+                        .background(LoginLavender),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Default.Lock, null, tint = Color.White, modifier = Modifier.size(28.dp))
@@ -169,12 +210,12 @@ fun LoginScreen(
                     "Admin Login",
                     fontSize   = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color      = LocalAppColors.current.textPrimary
+                    color      = LoginText
                 )
                 Text(
                     "Enter your admin password",
                     fontSize  = 13.sp,
-                    color     = LocalAppColors.current.textSecondary,
+                    color     = LoginMuted,
                     textAlign = TextAlign.Center
                 )
 
@@ -183,7 +224,7 @@ fun LoginScreen(
                     Text(
                         "Hint: default password is admin123",
                         fontSize = 11.sp,
-                        color    = LocalAppColors.current.red
+                        color    = LoginRed
                     )
                 }
                 if (passwordError) {
@@ -191,7 +232,7 @@ fun LoginScreen(
                     Text(
                         "Incorrect password. Try again.",
                         fontSize = 11.sp,
-                        color    = LocalAppColors.current.red
+                        color    = LoginRed
                     )
                 }
 
@@ -200,7 +241,7 @@ fun LoginScreen(
                 OutlinedTextField(
                     value         = password,
                     onValueChange = { password = it; passwordError = false },
-                    label         = { Text("Password", color = LocalAppColors.current.textSecondary) },
+                    label         = { Text("Password", color = LoginMuted) },
                     singleLine    = true,
                     visualTransformation = if (showPwd) VisualTransformation.None
                     else PasswordVisualTransformation(),
@@ -209,13 +250,23 @@ fun LoginScreen(
                             Icon(
                                 if (showPwd) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                                 null,
-                                tint = LocalAppColors.current.textMuted
+                                tint = LoginMuted
                             )
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     shape    = RoundedCornerShape(12.dp),
-                    colors   = darkFieldColors()
+                    colors   = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor      = LoginLavender,
+                        unfocusedBorderColor    = LoginBorder,
+                        focusedLabelColor       = LoginLavender,
+                        unfocusedLabelColor     = LoginMuted,
+                        cursorColor             = LoginCoral,
+                        focusedTextColor        = LoginText,
+                        unfocusedTextColor      = LoginText,
+                        focusedContainerColor   = LoginSurface,
+                        unfocusedContainerColor = LoginSurface
+                    )
                 )
 
                 Spacer(Modifier.height(14.dp))
@@ -226,7 +277,7 @@ fun LoginScreen(
                         if (!ok) { passwordError = true; attempts++; password = "" }
                     },
                     modifier = Modifier.fillMaxWidth().height(50.dp),
-                    colors   = ButtonDefaults.buttonColors(containerColor = LocalAppColors.current.lavender),
+                    colors   = ButtonDefaults.buttonColors(containerColor = LoginLavender),
                     shape    = RoundedCornerShape(12.dp)
                 ) {
                     Text(
@@ -239,7 +290,7 @@ fun LoginScreen(
 
                 Spacer(Modifier.height(8.dp))
                 TextButton(onClick = { showAdminForm = false; password = ""; passwordError = false }) {
-                    Text("← Back", color = LocalAppColors.current.textMuted, fontSize = 13.sp)
+                    Text("← Back", color = LoginMuted, fontSize = 13.sp)
                 }
             }
         }
@@ -259,8 +310,8 @@ private fun RoleCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(LocalAppColors.current.bgSurface)
-            .border(1.dp, accentColor.copy(alpha = 0.30f), RoundedCornerShape(16.dp))
+            .background(LoginSurface)
+            .border(1.dp, accentColor.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
             .clickable { onClick() }
             .padding(16.dp)
     ) {
@@ -281,12 +332,12 @@ private fun RoleCard(
                 title,
                 fontSize   = 15.sp,
                 fontWeight = FontWeight.Bold,
-                color      = LocalAppColors.current.textPrimary
+                color      = LoginText      // always dark readable text
             )
             Text(
                 subtitle,
                 fontSize = 12.sp,
-                color    = LocalAppColors.current.textSecondary
+                color    = LoginMuted
             )
         }
 
@@ -301,16 +352,3 @@ private fun RoleCard(
         }
     }
 }
-
-@Composable
-private fun darkFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor      = LocalAppColors.current.lavender,
-    unfocusedBorderColor    = LocalAppColors.current.border,
-    focusedLabelColor       = LocalAppColors.current.lavender,
-    unfocusedLabelColor     = LocalAppColors.current.textMuted,
-    cursorColor             = LocalAppColors.current.coral,
-    focusedTextColor        = LocalAppColors.current.textPrimary,
-    unfocusedTextColor      = LocalAppColors.current.textPrimary,
-    focusedContainerColor   = LocalAppColors.current.bgSurface,
-    unfocusedContainerColor = LocalAppColors.current.bgSurface
-)

@@ -48,6 +48,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.babyparenting.data.local.SubscriptionManager
+import com.example.babyparenting.data.local.SubscriptionStatus
 import com.example.babyparenting.data.local.TokenManager
 import com.example.babyparenting.ui.theme.LocalAppColors
 import com.example.babyparenting.viewmodel.JourneyViewModel
@@ -60,13 +62,17 @@ fun SettingsScreen(
 ) {
     val context      = LocalContext.current
     val tokenManager = remember { TokenManager(context) }
+    val subManager   = remember { SubscriptionManager(context) }
 
-    val childName  = viewModel.getChildName()
-    val childAge   = viewModel.getChildAgeMonths()
+    val childName   = viewModel.getChildName()
+    val childAge    = viewModel.getChildAgeMonths()
+    val parentEmail = tokenManager.getEmail()
+    val parentName  = tokenManager.getName()
 
-    // ── Parent info from JWT login ────────────────────────────────────────────
-    val parentEmail = tokenManager.getEmail()   // Jo email se login kiya
-    val parentName  = tokenManager.getName()    // Jo naam se register kiya
+    val subStatus        = subManager.getStatus()
+    val trialDaysLeft    = subManager.trialDaysRemaining()
+    val showTrialReminder = subManager.shouldShowTrialReminder()
+    val reminderMessage   = subManager.reminderMessage()
 
     var nameInput  by remember { mutableStateOf(childName) }
     var saved      by remember { mutableStateOf(false) }
@@ -84,113 +90,154 @@ fun SettingsScreen(
         // ── Top bar ───────────────────────────────────────────────────────────
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(colors.bgSurface)
+            modifier = Modifier.fillMaxWidth().background(colors.bgSurface)
                 .padding(end = 16.dp, top = 4.dp, bottom = 4.dp)
         ) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = colors.textSecondary)
             }
-            Text(
-                "Profile & Settings",
-                fontSize   = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color      = colors.textPrimary
-            )
+            Text("Profile & Settings", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
         }
 
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+
+            // ── Trial reminder banner (2-3 days before expiry) ─────────────────
+            if (showTrialReminder && reminderMessage.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFFFF3CD))
+                        .border(1.dp, Color(0xFFFFCC02).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("⚠️ ", fontSize = 16.sp)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        reminderMessage,
+                        fontSize   = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color      = Color(0xFF7A5800),
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+
             // ── Avatar card ───────────────────────────────────────────────────
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
+                modifier = Modifier.fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        Brush.linearGradient(listOf(colors.coral, colors.peach))
-                    )
+                    .background(Brush.linearGradient(listOf(colors.coral, colors.peach)))
                     .padding(24.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(70.dp)
-                            .clip(CircleShape)
+                        modifier = Modifier.size(70.dp).clip(CircleShape)
                             .background(Color.White.copy(alpha = 0.22f))
                     ) {
-                        // Initial letter — parent name pehle, phir child name
                         val initial = when {
                             parentName.isNotBlank() -> parentName.first().uppercase()
                             nameInput.isNotBlank()  -> nameInput.first().uppercase()
                             else                    -> "P"
                         }
-                        Text(
-                            text       = initial,
-                            fontSize   = 28.sp,
-                            fontWeight = FontWeight.Bold,
-                            color      = Color.White
-                        )
+                        Text(initial, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
 
                     Spacer(Modifier.height(10.dp))
-
-                    // Parent name
                     Text(
-                        text       = if (parentName.isNotBlank()) parentName else
-                            if (nameInput.isNotBlank()) "$nameInput's Parent" else "Parent",
-                        fontSize   = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color      = Color.White
+                        if (parentName.isNotBlank()) parentName
+                        else if (nameInput.isNotBlank()) "$nameInput's Parent" else "Parent",
+                        fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White
                     )
-
-                    // Parent email
                     if (parentEmail.isNotBlank()) {
                         Spacer(Modifier.height(4.dp))
-                        Text(
-                            text     = parentEmail,
-                            fontSize = 12.sp,
-                            color    = Color.White.copy(alpha = 0.80f)
-                        )
+                        Text(parentEmail, fontSize = 12.sp, color = Color.White.copy(alpha = 0.80f))
                     }
-
-                    // Child age
                     if (childAge > 0) {
                         Spacer(Modifier.height(4.dp))
-                        Text(
-                            "Child age: ${formatChildAge(childAge)}",
-                            fontSize = 12.sp,
-                            color    = Color.White.copy(alpha = 0.85f)
-                        )
+                        Text("Child age: ${formatChildAge(childAge)}", fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.85f))
                     }
                 }
             }
 
-            // ── Parent info row ───────────────────────────────────────────────
+            // ── Subscription / Trial status ───────────────────────────────────
+            SectionLabel("Subscription")
+
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(colors.bgSurface)
+                    .border(1.dp, colors.coral.copy(alpha = 0.15f), RoundedCornerShape(14.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                when (subStatus) {
+                    SubscriptionStatus.TRIAL_ACTIVE -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF4CAF82))
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("Free Trial Active 🎁", fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold, color = colors.textPrimary)
+                                Text(
+                                    "$trialDaysLeft day${if (trialDaysLeft == 1) "" else "s"} remaining",
+                                    fontSize = 12.sp, color = colors.textSecondary
+                                )
+                            }
+                        }
+                    }
+                    SubscriptionStatus.SUBSCRIBED -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFF4CAF82)))
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("Subscribed ✅", fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold, color = colors.textPrimary)
+                                Text(
+                                    "${subManager.subscriptionDaysRemaining()} days remaining",
+                                    fontSize = 12.sp, color = colors.textSecondary
+                                )
+                            }
+                        }
+                    }
+                    SubscriptionStatus.TRIAL_EXPIRED -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(10.dp).clip(CircleShape).background(Color(0xFFE53935)))
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("Free Trial Expired ⏰", fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold, color = colors.textPrimary)
+                                Text("Subscribe to continue using all features",
+                                    fontSize = 12.sp, color = colors.textSecondary)
+                            }
+                        }
+                    }
+                    SubscriptionStatus.NOT_STARTED -> {
+                        Text("No active subscription", fontSize = 13.sp, color = colors.textSecondary)
+                    }
+                }
+            }
+
+            // ── Account info ──────────────────────────────────────────────────
             if (parentEmail.isNotBlank()) {
+                SectionLabel("Account")
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
                         .background(colors.bgSurface)
                         .border(1.dp, colors.coral.copy(alpha = 0.15f), RoundedCornerShape(14.dp))
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text(
-                        "ACCOUNT",
-                        fontSize      = 11.sp,
-                        fontWeight    = FontWeight.Bold,
-                        color         = colors.textMuted,
-                        letterSpacing = 1.sp
-                    )
+                    Text("ACCOUNT", fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                        color = colors.textMuted, letterSpacing = 1.sp)
                     InfoRow("Name",  if (parentName.isNotBlank()) parentName else "—")
                     InfoRow("Email", parentEmail)
                 }
@@ -200,11 +247,8 @@ fun SettingsScreen(
             SectionLabel("Child Profile")
 
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(colors.bgSurface)
-                    .padding(16.dp),
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .background(colors.bgSurface).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 SettingsField(
@@ -215,7 +259,7 @@ fun SettingsScreen(
                 )
 
                 Button(
-                    onClick = { viewModel.setChildName(nameInput.trim()); saved = true },
+                    onClick  = { viewModel.setChildName(nameInput.trim()); saved = true },
                     modifier = Modifier.fillMaxWidth().height(46.dp),
                     colors   = ButtonDefaults.buttonColors(containerColor = colors.coral),
                     shape    = RoundedCornerShape(10.dp)
@@ -234,16 +278,13 @@ fun SettingsScreen(
             SectionLabel("About")
 
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(colors.bgSurface)
-                    .padding(16.dp),
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .background(colors.bgSurface).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                InfoRow("App Version",       "1.0.0")
-                InfoRow("Data Source",       "15 child development datasets")
-                InfoRow("Total Milestones",  "76,000+ activities")
+                InfoRow("App Version",      "1.0.0")
+                InfoRow("Data Source",      "15 child development datasets")
+                InfoRow("Total Milestones", "76,000+ activities")
             }
 
             // ── Logout ────────────────────────────────────────────────────────
@@ -255,12 +296,8 @@ fun SettingsScreen(
                 colors   = ButtonDefaults.buttonColors(containerColor = colors.red),
                 shape    = RoundedCornerShape(12.dp)
             ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Logout,
-                    null,
-                    modifier = Modifier.size(18.dp),
-                    tint     = Color.White
-                )
+                Icon(Icons.AutoMirrored.Filled.Logout, null,
+                    modifier = Modifier.size(18.dp), tint = Color.White)
                 Spacer(Modifier.width(8.dp))
                 Text("Log Out", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             }
@@ -275,23 +312,15 @@ fun SettingsScreen(
             onDismissRequest = { showLogout = false },
             containerColor   = colors.bgElevated,
             shape            = RoundedCornerShape(16.dp),
-            title = {
-                Text("Log Out?", fontWeight = FontWeight.Bold, color = colors.textPrimary)
-            },
-            text = {
-                Text(
-                    "You will be taken back to the login screen. Your progress is saved.",
-                    fontSize = 13.sp,
-                    color    = colors.textSecondary
-                )
+            title = { Text("Log Out?", fontWeight = FontWeight.Bold, color = colors.textPrimary) },
+            text  = {
+                Text("You will be taken back to the login screen. Your progress is saved.",
+                    fontSize = 13.sp, color = colors.textSecondary)
             },
             confirmButton = {
-                Button(
-                    onClick = { showLogout = false; onLogout() },
-                    colors  = ButtonDefaults.buttonColors(containerColor = colors.red)
-                ) {
-                    Text("Log Out", color = Color.White)
-                }
+                Button(onClick = { showLogout = false; onLogout() },
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.red)
+                ) { Text("Log Out", color = Color.White) }
             },
             dismissButton = {
                 TextButton(onClick = { showLogout = false }) {
@@ -306,43 +335,25 @@ fun SettingsScreen(
 
 @Composable
 private fun SectionLabel(label: String) {
-    Text(
-        label.uppercase(),
-        fontSize      = 11.sp,
-        fontWeight    = FontWeight.Bold,
-        color         = LocalAppColors.current.textMuted,
-        letterSpacing = 1.sp,
-        modifier      = Modifier.padding(start = 4.dp)
-    )
+    Text(label.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold,
+        color = LocalAppColors.current.textMuted, letterSpacing = 1.sp,
+        modifier = Modifier.padding(start = 4.dp))
 }
 
 @Composable
-private fun SettingsField(
-    value: String,
-    onChange: (String) -> Unit,
-    label: String,
-    icon: ImageVector
-) {
+private fun SettingsField(value: String, onChange: (String) -> Unit, label: String, icon: ImageVector) {
     val colors = LocalAppColors.current
     OutlinedTextField(
-        value         = value,
-        onValueChange = onChange,
-        label         = { Text(label) },
-        leadingIcon   = {
-            Icon(icon, null, tint = colors.coral, modifier = Modifier.size(18.dp))
-        },
-        singleLine = true,
-        modifier   = Modifier.fillMaxWidth(),
-        shape      = RoundedCornerShape(10.dp),
-        colors     = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor      = colors.coral,
-            unfocusedBorderColor    = colors.border,
-            focusedLabelColor       = colors.coral,
-            unfocusedLabelColor     = colors.textMuted,
-            focusedTextColor        = colors.textPrimary,
-            unfocusedTextColor      = colors.textPrimary,
-            focusedContainerColor   = colors.bgSurface,
-            unfocusedContainerColor = colors.bgSurface,
+        value = value, onValueChange = onChange,
+        label = { Text(label) },
+        leadingIcon = { Icon(icon, null, tint = colors.coral, modifier = Modifier.size(18.dp)) },
+        singleLine = true, modifier = Modifier.fillMaxWidth(),
+        shape  = RoundedCornerShape(10.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor      = colors.coral, unfocusedBorderColor    = colors.border,
+            focusedLabelColor       = colors.coral, unfocusedLabelColor     = colors.textMuted,
+            focusedTextColor        = colors.textPrimary, unfocusedTextColor = colors.textPrimary,
+            focusedContainerColor   = colors.bgSurface, unfocusedContainerColor = colors.bgSurface,
             cursorColor             = colors.coral
         )
     )
@@ -350,18 +361,9 @@ private fun SettingsField(
 
 @Composable
 private fun InfoRow(label: String, value: String) {
-    Row(
-        Modifier.fillMaxWidth(),
-        Arrangement.SpaceBetween,
-        Alignment.CenterVertically
-    ) {
+    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
         Text(label, fontSize = 13.sp, color = LocalAppColors.current.textSecondary)
-        Text(
-            value,
-            fontSize   = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color      = LocalAppColors.current.textPrimary
-        )
+        Text(value, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = LocalAppColors.current.textPrimary)
     }
 }
 

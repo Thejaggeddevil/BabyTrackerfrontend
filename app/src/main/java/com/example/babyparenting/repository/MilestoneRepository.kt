@@ -10,9 +10,11 @@ import com.example.babyparenting.data.model.JourneyProgress
 import com.example.babyparenting.data.model.Milestone
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 
 /**
  * Single source of truth. Lazy loads one age group at a time.
@@ -49,45 +51,37 @@ class MilestoneRepository(private val context: Context) {
             _error.value     = null
             _ageGroups.value = loader.getAgeGroups()
 
-            val childAge   = getChildAgeMonths()
-            val startGroup = loader.startingGroupId(childAge)
+            val childAge = getChildAgeMonths()
 
-            for (groupId in 1..startGroup) {
+            // ✅ FIXED: Only load floor + ceiling group (2 groups max)
+            // Old: for (groupId in 1..startGroup) → loaded ALL groups = ANR
+            // New: groupsToPreload() = only [floorGroup, floorGroup+1]
+            val groupsToLoad = loader.groupsToPreload(childAge)
+            for (groupId in groupsToLoad) {
                 loadGroupIfNeeded(groupId)
             }
 
-            // CRITICAL FIX: After loading, recalculate completed IDs from scratch
-            // based on the stored child age. Do NOT blindly read old SharedPreferences
-            // data — that causes stale completions from previous test sessions to persist.
-            //
-            // Rule: milestones STRICTLY BEFORE child's age are auto-completed.
-            // Milestones AT or AFTER child's age are NOT completed.
-            //
-            // Newborn (0 months) → ageMonths < 0 → nothing → 0 completions ✅
-            // 6 months → ageMonths < 6 → 0–5 month milestones auto-completed ✅
+            // Auto-complete milestones strictly before child's age
             val correctIds = loadedMilestones
                 .filter { it.ageMonths < childAge }
                 .map { it.id }
                 .toSet()
 
-            // Merge: keep any IDs the user manually completed AND the age-based ones.
-            // This preserves real user progress (milestones they tapped Mark as Complete).
-            val savedIds    = getCompletedIds()
-            val validSaved  = savedIds.filter { id ->
+            val savedIds   = getCompletedIds()
+            val validSaved = savedIds.filter { id ->
                 loadedMilestones.any { it.id == id }
             }.toSet()
 
             val finalIds = (correctIds + validSaved).toSet()
             saveCompletedIds(finalIds)
-
             mergeAndEmitWithIds(finalIds)
+
         } catch (e: Exception) {
             _error.value = "Failed to load: ${e.localizedMessage}"
         } finally {
             _isLoading.value = false
         }
     }
-
     suspend fun loadNextGroupIfNeeded(nextGroupId: Int) {
         if (nextGroupId > loader.totalGroups()) return
         if (nextGroupId <= highestLoadedGroup) return
@@ -157,9 +151,12 @@ class MilestoneRepository(private val context: Context) {
 
     // ── Private ───────────────────────────────────────────────────────────────
 
+    // ✅ Add withContext(Dispatchers.IO) here
     private suspend fun loadGroupIfNeeded(groupId: Int) {
         if (groupId <= highestLoadedGroup) return
-        val newMs = loader.loadForGroup(groupId)
+        val newMs = withContext(Dispatchers.IO) {   // ← add this
+            loader.loadForGroup(groupId)
+        }
         loadedMilestones.addAll(newMs)
         highestLoadedGroup = groupId
     }

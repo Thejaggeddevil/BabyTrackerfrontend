@@ -11,6 +11,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.babyparenting.data.local.SessionManager
+import com.example.babyparenting.data.local.SubscriptionManager
 import com.example.babyparenting.ui.screens.AdminPanelScreen
 import com.example.babyparenting.ui.screens.AdviceScreen
 import com.example.babyparenting.ui.screens.AuthScreen
@@ -28,7 +29,7 @@ import com.example.babyparenting.viewmodel.ParentViewModel
 
 object Routes {
     const val LOGIN         = "login"
-    const val AUTH          = "auth"          // ← NEW: Email/Password Login+Register
+    const val AUTH          = "auth"
     const val ONBOARDING    = "onboarding"
     const val JOURNEY       = "journey"
     const val ADVICE        = "advice"
@@ -46,12 +47,12 @@ fun AppNavigation(
 ) {
     val context   = LocalContext.current
     val session   = remember { SessionManager(context) }
+    val subMgr    = remember { SubscriptionManager(context) }   // ← trial manager
     val journeyVm: JourneyViewModel = viewModel()
     val adminVm:   AdminViewModel   = viewModel()
     val parentVm:  ParentViewModel  = viewModel()
-    val authVm:    AuthViewModel    = viewModel()   // ← NEW
+    val authVm:    AuthViewModel    = viewModel()
 
-    // Start destination — JWT token hai toh seedha journey/onboarding
     val startDestination = when {
         authVm.isLoggedIn() && journeyVm.getChildName().isNotBlank() -> Routes.JOURNEY
         authVm.isLoggedIn()                                          -> Routes.ONBOARDING
@@ -63,11 +64,8 @@ fun AppNavigation(
         // ── Login — role selection ─────────────────────────────────────────────
         composable(Routes.LOGIN) {
             LoginScreen(
-                onParentLogin = {
-                    // "I'm a Parent" → AuthScreen (Login/Register)
-                    navController.navigate(Routes.AUTH)
-                },
-                onAdminLogin = { password ->
+                onParentLogin = { navController.navigate(Routes.AUTH) },
+                onAdminLogin  = { password ->
                     val ok = adminVm.loginFromStart(password)
                     if (ok) {
                         navController.navigate(Routes.ADMIN) {
@@ -85,6 +83,14 @@ fun AppNavigation(
                 viewModel     = authVm,
                 onAuthSuccess = {
                     session.setLoggedIn(true)
+
+                    // ── TRIAL ACTIVATION ──────────────────────────────────────
+                    // Pehli baar login → 14-din trial shuru karo.
+                    // subMgr.activateTrial() internally checks: agar already
+                    // started hai toh kuch nahi karta (idempotent).
+                    subMgr.activateTrial()
+                    // ─────────────────────────────────────────────────────────
+
                     val hasProfile = journeyVm.getChildName().isNotBlank()
                     if (hasProfile) {
                         navController.navigate(Routes.JOURNEY) {
@@ -145,7 +151,7 @@ fun AppNavigation(
             )
         }
 
-        // ── Paywall ───────────────────────────────────────────────────────────
+        // ── Paywall (shown after trial expires) ───────────────────────────────
         composable(Routes.PAYWALL) {
             PaywallScreen(
                 viewModel        = journeyVm,
@@ -167,8 +173,10 @@ fun AppNavigation(
                 viewModel = journeyVm,
                 onBack    = { navController.popBackStack() },
                 onLogout  = {
-                    authVm.logout()        // JWT token clear
-                    session.logout()       // Session clear
+                    authVm.logout()
+                    session.logout()
+                    // NOTE: We do NOT reset the trial on logout.
+                    // If user logs back in, their trial continues from where it left off.
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }

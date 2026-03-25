@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
@@ -47,14 +48,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,6 +68,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -84,7 +85,6 @@ import com.example.babyparenting.ui.components.SectionHeader
 import com.example.babyparenting.ui.components.computeNodePositions
 import com.example.babyparenting.ui.theme.LocalAppColors
 import com.example.babyparenting.viewmodel.JourneyViewModel
-import kotlin.math.roundToInt
 
 private val SEGMENT_DP: Dp = 130.dp
 
@@ -145,18 +145,14 @@ fun BabyJourneyScreen(
             HamburgerMenu(
                 isDark          = c.isDark,
                 onParentHub     = { menuExpanded = false; onParentHubTapped() },
-                onMilestones    = { menuExpanded = false },  // already on journey
+                onMilestones    = { menuExpanded = false },
                 onSettings      = { menuExpanded = false; onSettingsTapped() },
                 onToggleTheme   = { menuExpanded = false; onToggleTheme() }
             )
         }
 
-        // Dismiss overlay when menu open
         if (menuExpanded) {
-            Box(
-                Modifier.fillMaxSize().zIndex(9f)
-                    .clickable { menuExpanded = false }
-            )
+            Box(Modifier.fillMaxSize().zIndex(9f).clickable { menuExpanded = false })
         }
     }
 
@@ -196,59 +192,33 @@ private fun HamburgerMenu(
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        MenuItem(
-            icon     = Icons.Default.AdminPanelSettings,
-            label    = "Parent Hub",
-            color    = c.lavender,
-            onClick  = onParentHub
-        )
+        MenuItem(icon = Icons.Default.AdminPanelSettings, label = "Parent Hub",  color = c.lavender, onClick = onParentHub)
         MenuDivider()
-        MenuItem(
-            icon     = Icons.Default.Stars,
-            label    = "Milestones",
-            color    = c.coral,
-            onClick  = onMilestones
-        )
+        MenuItem(icon = Icons.Default.Stars,              label = "Millennial",   color = c.coral,    onClick = onMilestones)
         MenuDivider()
-        MenuItem(
-            icon     = Icons.Default.Person,
-            label    = "Settings",
-            color    = c.sky,
-            onClick  = onSettings
-        )
+        MenuItem(icon = Icons.Default.Person,             label = "Settings",     color = c.sky,      onClick = onSettings)
         MenuDivider()
 
-        // Appearance toggle row
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(c.menuItemBg)
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                .background(c.menuItemBg).padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
             Icon(
                 if (isDark) Icons.Default.DarkMode else Icons.Default.LightMode,
-                contentDescription = null,
-                tint     = c.gold,
-                modifier = Modifier.size(20.dp)
+                contentDescription = null, tint = c.gold, modifier = Modifier.size(20.dp)
             )
             Spacer(Modifier.width(10.dp))
             Text(
                 if (isDark) "Dark Mode" else "Light Mode",
-                fontSize   = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color      = c.textPrimary,
-                modifier   = Modifier.weight(1f)
+                fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.textPrimary,
+                modifier = Modifier.weight(1f)
             )
             Switch(
-                checked         = isDark,
-                onCheckedChange = { onToggleTheme() },
-                colors          = SwitchDefaults.colors(
-                    checkedThumbColor   = c.bgMain,
-                    checkedTrackColor   = c.lavender,
-                    uncheckedThumbColor = c.bgMain,
-                    uncheckedTrackColor = c.coral
+                checked = isDark, onCheckedChange = { onToggleTheme() },
+                colors  = SwitchDefaults.colors(
+                    checkedThumbColor   = c.bgMain, checkedTrackColor   = c.lavender,
+                    uncheckedThumbColor = c.bgMain, uncheckedTrackColor = c.coral
                 )
             )
         }
@@ -260,19 +230,13 @@ private fun MenuItem(icon: ImageVector, label: String, color: Color, onClick: ()
     val c = LocalAppColors.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(c.menuItemBg)
-            .clickable { onClick() }
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+            .background(c.menuItemBg).clickable { onClick() }
             .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
+        Box(contentAlignment = Alignment.Center,
             modifier = Modifier.size(30.dp).clip(CircleShape).background(color.copy(alpha = 0.15f))
-        ) {
-            Icon(icon, null, tint = color, modifier = Modifier.size(17.dp))
-        }
+        ) { Icon(icon, null, tint = color, modifier = Modifier.size(17.dp)) }
         Spacer(Modifier.width(12.dp))
         Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.textPrimary)
     }
@@ -371,7 +335,6 @@ private fun JourneyHeader(
                 Text("Track every milestone with love", fontSize = 12.sp, color = c.textSecondary)
             }
 
-            // Hamburger icon
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
@@ -398,8 +361,7 @@ private fun JourneyHeader(
             LinearProgressIndicator(
                 progress   = animProg,
                 modifier   = Modifier.weight(1f).height(7.dp).clip(RoundedCornerShape(4.dp)),
-                color      = c.coral,
-                trackColor = c.border
+                color      = c.coral, trackColor = c.border
             )
             Spacer(Modifier.width(10.dp))
             Text("${progress.completedMilestones}/${progress.totalMilestones}",
@@ -453,60 +415,142 @@ private fun EmptyView() {
     }
 }
 
-// ── Age dialog ────────────────────────────────────────────────────────────────
+// ── Age dialog — Manual input (years + months) ────────────────────────────────
 
 @Composable
-private fun AgeDialog(currentAge: Int, childName: String, onConfirm: (String, Int) -> Unit, onDismiss: () -> Unit) {
+private fun AgeDialog(
+    currentAge: Int,
+    childName: String,
+    onConfirm: (String, Int) -> Unit,
+    onDismiss: () -> Unit
+) {
     val c = LocalAppColors.current
-    var sliderVal by remember { mutableStateOf(currentAge.toFloat()) }
-    var nameInput by remember { mutableStateOf(childName) }
-    val months = sliderVal.roundToInt()
+
+    // Pre-fill from existing age
+    var nameInput   by remember { mutableStateOf(childName) }
+    var yearsInput  by remember { mutableStateOf(if (currentAge >= 12) (currentAge / 12).toString() else "") }
+    var monthsInput by remember { mutableStateOf(if (currentAge in 1..11) currentAge.toString() else if (currentAge > 12) (currentAge % 12).toString() else "") }
+    var ageError    by remember { mutableStateOf("") }
+
+    val totalMonths by remember {
+        derivedStateOf {
+            val y = yearsInput.trim().toIntOrNull() ?: 0
+            val m = monthsInput.trim().toIntOrNull() ?: 0
+            y * 12 + m
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor   = c.bgElevated,
         shape            = RoundedCornerShape(18.dp),
-        title = { Text("Child's Profile", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.textPrimary) },
+        title = {
+            Text("Child's Profile", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.textPrimary)
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Name field
                 OutlinedTextField(
                     value = nameInput, onValueChange = { nameInput = it },
                     label = { Text("Child's name") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = c.coral, unfocusedBorderColor = c.border,
-                        focusedLabelColor  = c.coral, focusedTextColor = c.textPrimary,
-                        unfocusedTextColor = c.textPrimary,
-                        focusedContainerColor = c.bgElevated, unfocusedContainerColor = c.bgElevated
+                        focusedBorderColor      = c.coral, unfocusedBorderColor    = c.border,
+                        focusedLabelColor       = c.coral, focusedTextColor        = c.textPrimary,
+                        unfocusedTextColor      = c.textPrimary,
+                        focusedContainerColor   = c.bgElevated, unfocusedContainerColor = c.bgElevated
                     )
                 )
-                Column {
-                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                        Text("Current age", fontSize = 13.sp, color = c.textSecondary)
-                        Text(formatAge(months), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.coral)
+
+                // Age section
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Child's current age", fontSize = 13.sp, color = c.textSecondary,
+                        fontWeight = FontWeight.SemiBold)
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        // Years
+                        OutlinedTextField(
+                            value         = yearsInput,
+                            onValueChange = {
+                                val n = it.filter { ch -> ch.isDigit() }
+                                if (n.isEmpty() || (n.toIntOrNull() ?: 0) <= 12) {
+                                    yearsInput = n; ageError = ""
+                                }
+                            },
+                            label       = { Text("Years") },
+                            placeholder = { Text("0", color = c.textMuted) },
+                            singleLine  = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            isError     = ageError.isNotEmpty(),
+                            modifier    = Modifier.weight(1f),
+                            shape       = RoundedCornerShape(10.dp),
+                            colors      = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor      = c.coral, unfocusedBorderColor    = c.border,
+                                focusedLabelColor       = c.coral, focusedTextColor        = c.textPrimary,
+                                unfocusedTextColor      = c.textPrimary,
+                                focusedContainerColor   = c.bgElevated, unfocusedContainerColor = c.bgElevated
+                            )
+                        )
+
+                        // Months
+                        OutlinedTextField(
+                            value         = monthsInput,
+                            onValueChange = {
+                                val n = it.filter { ch -> ch.isDigit() }
+                                if (n.isEmpty() || (n.toIntOrNull() ?: 0) <= 11) {
+                                    monthsInput = n; ageError = ""
+                                }
+                            },
+                            label       = { Text("Months") },
+                            placeholder = { Text("0", color = c.textMuted) },
+                            singleLine  = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            isError     = ageError.isNotEmpty(),
+                            modifier    = Modifier.weight(1f),
+                            shape       = RoundedCornerShape(10.dp),
+                            colors      = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor      = c.coral, unfocusedBorderColor    = c.border,
+                                focusedLabelColor       = c.coral, focusedTextColor        = c.textPrimary,
+                                unfocusedTextColor      = c.textPrimary,
+                                focusedContainerColor   = c.bgElevated, unfocusedContainerColor = c.bgElevated
+                            )
+                        )
                     }
-                    Slider(
-                        value = sliderVal, onValueChange = { sliderVal = it },
-                        valueRange = 0f..144f, steps = 143,
-                        colors = SliderDefaults.colors(thumbColor = c.coral, activeTrackColor = c.coral, inactiveTrackColor = c.border)
-                    )
-                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-                        Text("Newborn", fontSize = 10.sp, color = c.textMuted)
-                        Text("12 years", fontSize = 10.sp, color = c.textMuted)
+
+                    if (ageError.isNotEmpty()) {
+                        Text(ageError, fontSize = 11.sp, color = c.red)
                     }
-                    if (months > 0) {
-                        Spacer(Modifier.height(6.dp))
-                        Text("Past milestones will be auto-completed", fontSize = 11.sp, color = c.coral)
+
+                    // Preview
+                    if (totalMonths > 0) {
+                        Text(
+                            "Age: ${formatAge(totalMonths)} · Past milestones will be auto-completed",
+                            fontSize = 11.sp, color = c.coral
+                        )
+                    } else {
+                        Text("Enter 0 years 0 months for a newborn", fontSize = 11.sp, color = c.textMuted)
                     }
                 }
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(nameInput.trim(), months) },
+            Button(
+                onClick = {
+                    val years  = yearsInput.trim().toIntOrNull() ?: 0
+                    val months = monthsInput.trim().toIntOrNull() ?: 0
+                    if (years > 12 || (years == 12 && months > 0)) {
+                        ageError = "Max age is 12 years"
+                    } else {
+                        onConfirm(nameInput.trim(), totalMonths)
+                    }
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = c.coral),
-                shape = RoundedCornerShape(10.dp)) { Text("Save", color = Color.White) }
+                shape  = RoundedCornerShape(10.dp)
+            ) { Text("Save", color = Color.White) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = c.textMuted) } }
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = c.textMuted) }
+        }
     )
 }
 

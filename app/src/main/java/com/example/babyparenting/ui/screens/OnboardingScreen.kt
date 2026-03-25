@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,9 +20,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChildCare
@@ -31,11 +34,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,12 +51,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
 
-// Warm colors — same palette as AuthScreen + Razorpay
 private val WarmBg1    = Color(0xFFFFF0E6)
 private val WarmBg2    = Color(0xFFFFE4D0)
 private val WarmBg3    = Color(0xFFF5F0EB)
@@ -69,10 +70,20 @@ private val WarmBlue   = Color(0xFF1565C0)
 
 @Composable
 fun OnboardingScreen(onComplete: (name: String, ageMonths: Int) -> Unit) {
-    var childName by remember { mutableStateOf("") }
-    var sliderVal by remember { mutableStateOf(0f) }
-    var nameError by remember { mutableStateOf(false) }
-    val months = sliderVal.roundToInt()
+    var childName  by remember { mutableStateOf("") }
+    var yearsInput by remember { mutableStateOf("") }
+    var monthsInput by remember { mutableStateOf("") }
+    var nameError  by remember { mutableStateOf(false) }
+    var ageError   by remember { mutableStateOf("") }
+
+    // Compute total months from years + months fields
+    val totalMonths by remember {
+        derivedStateOf {
+            val y = yearsInput.trim().toIntOrNull() ?: 0
+            val m = monthsInput.trim().toIntOrNull() ?: 0
+            y * 12 + m
+        }
+    }
 
     val logoScale = remember { Animatable(0f) }
     val pageAlpha = remember { Animatable(0f) }
@@ -141,7 +152,7 @@ fun OnboardingScreen(onComplete: (name: String, ageMonths: Int) -> Unit) {
                     color      = WarmText
                 )
 
-                // Child name field
+                // ── Child name ────────────────────────────────────────────────
                 OutlinedTextField(
                     value         = childName,
                     onValueChange = { childName = it; nameError = false },
@@ -160,48 +171,113 @@ fun OnboardingScreen(onComplete: (name: String, ageMonths: Int) -> Unit) {
                     colors   = warmFieldColors()
                 )
 
-                // Age slider
+                // ── Age input — Years + Months ────────────────────────────────
                 Column {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        Arrangement.SpaceBetween,
-                        Alignment.CenterVertically
-                    ) {
-                        Text("Child's current age", fontSize = 13.sp, color = WarmMuted)
-                        Text(
-                            formatAge(months),
-                            fontSize   = 15.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color      = WarmCoral
-                        )
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Slider(
-                        value         = sliderVal,
-                        onValueChange = { sliderVal = it },
-                        valueRange    = 0f..144f,
-                        steps         = 143,
-                        colors        = SliderDefaults.colors(
-                            thumbColor         = WarmCoral,
-                            activeTrackColor   = WarmCoral,
-                            inactiveTrackColor = Color(0xFFFFD6C2)
-                        )
+                    Text(
+                        "Child's current age *",
+                        fontSize   = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color      = WarmText
                     )
-                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-                        Text("Newborn", fontSize = 10.sp, color = WarmMuted)
-                        Text("12 years", fontSize = 10.sp, color = WarmMuted)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Enter years and months separately",
+                        fontSize = 11.sp,
+                        color    = WarmMuted
+                    )
+                    Spacer(Modifier.height(10.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Years field
+                        OutlinedTextField(
+                            value         = yearsInput,
+                            onValueChange = {
+                                // Max 12 years
+                                val n = it.filter { c -> c.isDigit() }
+                                if (n.isEmpty() || (n.toIntOrNull() ?: 0) <= 12) {
+                                    yearsInput = n
+                                    ageError = ""
+                                }
+                            },
+                            label         = { Text("Years") },
+                            placeholder   = { Text("0", color = WarmMuted) },
+                            singleLine    = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            isError       = ageError.isNotEmpty(),
+                            modifier      = Modifier.weight(1f),
+                            shape         = RoundedCornerShape(12.dp),
+                            colors        = warmFieldColors()
+                        )
+
+                        // Months field
+                        OutlinedTextField(
+                            value         = monthsInput,
+                            onValueChange = {
+                                // Max 11 months (0-11)
+                                val n = it.filter { c -> c.isDigit() }
+                                if (n.isEmpty() || (n.toIntOrNull() ?: 0) <= 11) {
+                                    monthsInput = n
+                                    ageError = ""
+                                }
+                            },
+                            label         = { Text("Months") },
+                            placeholder   = { Text("0", color = WarmMuted) },
+                            singleLine    = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            isError       = ageError.isNotEmpty(),
+                            modifier      = Modifier.weight(1f),
+                            shape         = RoundedCornerShape(12.dp),
+                            colors        = warmFieldColors()
+                        )
                     }
-                    if (months > 0) {
-                        Spacer(Modifier.height(8.dp))
+
+                    if (ageError.isNotEmpty()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(ageError, fontSize = 11.sp, color = WarmRed)
+                    }
+
+                    // Age preview
+                    if (totalMonths > 0) {
+                        Spacer(Modifier.height(10.dp))
                         Box(
                             Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(WarmCoral.copy(alpha = 0.10f))
+                                .border(1.dp, WarmCoral.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+                                .padding(10.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("👶 ", fontSize = 14.sp)
+                                Column {
+                                    Text(
+                                        "Age: ${formatAge(totalMonths)}",
+                                        fontSize   = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color      = WarmCoral
+                                    )
+                                    Text(
+                                        "Past milestones will be auto-completed",
+                                        fontSize = 11.sp,
+                                        color    = WarmMuted
+                                    )
+                                }
+                            }
+                        }
+                    } else if (yearsInput.isEmpty() && monthsInput.isEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(Color(0xFFE3F2FD))
                                 .padding(10.dp)
                         ) {
                             Text(
-                                "✓ All milestones up to ${formatAge(months)} will be auto-completed",
+                                "💡 Leave both as 0 for a newborn",
                                 fontSize = 11.sp,
                                 color    = WarmBlue
                             )
@@ -211,6 +287,27 @@ fun OnboardingScreen(onComplete: (name: String, ageMonths: Int) -> Unit) {
             }
 
             Spacer(Modifier.height(12.dp))
+
+            // ── Free trial notice ─────────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(WarmCoral.copy(alpha = 0.10f))
+                    .border(1.dp, WarmCoral.copy(alpha = 0.20f), RoundedCornerShape(10.dp))
+                    .padding(12.dp)
+            ) {
+                Text("🎁 ", fontSize = 14.sp)
+                Text(
+                    "14 days FREE! Explore all features at no cost.",
+                    fontSize   = 12.sp,
+                    color      = Color(0xFF5C3D2E),
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = 18.sp
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
 
             // ── Privacy note ──────────────────────────────────────────────────
             Row(
@@ -258,8 +355,20 @@ fun OnboardingScreen(onComplete: (name: String, ageMonths: Int) -> Unit) {
             // ── CTA button ────────────────────────────────────────────────────
             Button(
                 onClick = {
-                    if (childName.isBlank()) nameError = true
-                    else onComplete(childName.trim(), months)
+                    var hasError = false
+                    if (childName.isBlank()) {
+                        nameError = true
+                        hasError = true
+                    }
+                    val years = yearsInput.trim().toIntOrNull() ?: 0
+                    val months = monthsInput.trim().toIntOrNull() ?: 0
+                    if (years > 12 || (years == 12 && months > 0)) {
+                        ageError = "Maximum age is 12 years"
+                        hasError = true
+                    }
+                    if (!hasError) {
+                        onComplete(childName.trim(), totalMonths)
+                    }
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape    = RoundedCornerShape(14.dp),
