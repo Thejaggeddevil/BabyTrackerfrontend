@@ -13,6 +13,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.babyparenting.data.local.SessionManager
 import com.example.babyparenting.ui.screens.AdminPanelScreen
 import com.example.babyparenting.ui.screens.AdviceScreen
+import com.example.babyparenting.ui.screens.AuthScreen
 import com.example.babyparenting.ui.screens.BabyJourneyScreen
 import com.example.babyparenting.ui.screens.LoginScreen
 import com.example.babyparenting.ui.screens.OnboardingScreen
@@ -21,11 +22,13 @@ import com.example.babyparenting.ui.screens.ParentHubScreen
 import com.example.babyparenting.ui.screens.PaywallScreen
 import com.example.babyparenting.ui.screens.SettingsScreen
 import com.example.babyparenting.viewmodel.AdminViewModel
+import com.example.babyparenting.viewmodel.AuthViewModel
 import com.example.babyparenting.viewmodel.JourneyViewModel
 import com.example.babyparenting.viewmodel.ParentViewModel
 
 object Routes {
     const val LOGIN         = "login"
+    const val AUTH          = "auth"          // ← NEW: Email/Password Login+Register
     const val ONBOARDING    = "onboarding"
     const val JOURNEY       = "journey"
     const val ADVICE        = "advice"
@@ -46,19 +49,41 @@ fun AppNavigation(
     val journeyVm: JourneyViewModel = viewModel()
     val adminVm:   AdminViewModel   = viewModel()
     val parentVm:  ParentViewModel  = viewModel()
+    val authVm:    AuthViewModel    = viewModel()   // ← NEW
 
+    // Start destination — JWT token hai toh seedha journey/onboarding
     val startDestination = when {
-        session.isLoggedIn() && journeyVm.getChildName().isNotBlank() -> Routes.JOURNEY
-        session.isLoggedIn()                                          -> Routes.ONBOARDING
-        else                                                          -> Routes.LOGIN
+        authVm.isLoggedIn() && journeyVm.getChildName().isNotBlank() -> Routes.JOURNEY
+        authVm.isLoggedIn()                                          -> Routes.ONBOARDING
+        else                                                         -> Routes.LOGIN
     }
 
     NavHost(navController = navController, startDestination = startDestination) {
 
-        // ── Login ─────────────────────────────────────────────────────────────
+        // ── Login — role selection ─────────────────────────────────────────────
         composable(Routes.LOGIN) {
             LoginScreen(
                 onParentLogin = {
+                    // "I'm a Parent" → AuthScreen (Login/Register)
+                    navController.navigate(Routes.AUTH)
+                },
+                onAdminLogin = { password ->
+                    val ok = adminVm.loginFromStart(password)
+                    if (ok) {
+                        navController.navigate(Routes.ADMIN) {
+                            popUpTo(Routes.LOGIN) { inclusive = true }
+                        }
+                    }
+                    ok
+                }
+            )
+        }
+
+        // ── Auth — Email + Password Login / Register ──────────────────────────
+        composable(Routes.AUTH) {
+            AuthScreen(
+                viewModel     = authVm,
+                onAuthSuccess = {
                     session.setLoggedIn(true)
                     val hasProfile = journeyVm.getChildName().isNotBlank()
                     if (hasProfile) {
@@ -70,15 +95,6 @@ fun AppNavigation(
                             popUpTo(Routes.LOGIN) { inclusive = true }
                         }
                     }
-                },
-                onAdminLogin = { password ->
-                    val ok = adminVm.loginFromStart(password)
-                    if (ok) {
-                        navController.navigate(Routes.ADMIN) {
-                            popUpTo(Routes.LOGIN) { inclusive = true }
-                        }
-                    }
-                    ok
                 }
             )
         }
@@ -98,7 +114,6 @@ fun AppNavigation(
 
         // ── Journey map ───────────────────────────────────────────────────────
         composable(Routes.JOURNEY) {
-            // Paywall trigger — jab trial expire ho
             val showPaywall by journeyVm.showPaywall.collectAsState()
             if (showPaywall) {
                 navController.navigate(Routes.PAYWALL)
@@ -152,7 +167,8 @@ fun AppNavigation(
                 viewModel = journeyVm,
                 onBack    = { navController.popBackStack() },
                 onLogout  = {
-                    session.logout()
+                    authVm.logout()        // JWT token clear
+                    session.logout()       // Session clear
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }

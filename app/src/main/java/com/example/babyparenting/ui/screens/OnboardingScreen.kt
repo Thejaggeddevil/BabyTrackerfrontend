@@ -47,12 +47,25 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.babyparenting.ui.theme.LocalAppColors
 import kotlin.math.roundToInt
+
+// Warm colors — same palette as AuthScreen + Razorpay
+private val WarmBg1    = Color(0xFFFFF0E6)
+private val WarmBg2    = Color(0xFFFFE4D0)
+private val WarmBg3    = Color(0xFFF5F0EB)
+private val WarmCoral  = Color(0xFFFF8B94)
+private val WarmPeach  = Color(0xFFFFB06A)
+private val WarmText   = Color(0xFF2D1B0E)
+private val WarmMuted  = Color(0xFFAA8877)
+private val WarmBorder = Color(0xFFDDDDDD)
+private val WarmCard   = Color.White
+private val WarmRed    = Color(0xFFE53935)
+private val WarmBlue   = Color(0xFF1565C0)
 
 @Composable
 fun OnboardingScreen(onComplete: (name: String, ageMonths: Int) -> Unit) {
@@ -71,9 +84,7 @@ fun OnboardingScreen(onComplete: (name: String, ageMonths: Int) -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(
-                listOf(Color(0xFF1E1B30), Color(0xFF221F34), LocalAppColors.current.bgMain)
-            ))
+            .background(Brush.verticalGradient(listOf(WarmBg1, WarmBg2, WarmBg3)))
     ) {
         Column(
             modifier = Modifier
@@ -88,80 +99,112 @@ fun OnboardingScreen(onComplete: (name: String, ageMonths: Int) -> Unit) {
         ) {
             Spacer(Modifier.height(16.dp))
 
+            // ── Logo ──────────────────────────────────────────────────────────
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(90.dp)
                     .scale(logoScale.value)
                     .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(LocalAppColors.current.coral, LocalAppColors.current.peach)))
+                    .background(Brush.linearGradient(listOf(WarmCoral, WarmPeach)))
             ) {
                 Icon(Icons.Default.ChildCare, null, tint = Color.White, modifier = Modifier.size(50.dp))
             }
 
             Spacer(Modifier.height(20.dp))
-            Text("Welcome!", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = LocalAppColors.current.textPrimary)
-            Text("Baby Parenting Companion", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = LocalAppColors.current.coral)
+            Text("Welcome!", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = WarmText)
+            Text("Baby Parenting Companion", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = WarmCoral)
             Spacer(Modifier.height(4.dp))
-            Text("Powered by 76,000+ child development activities",
-                fontSize = 12.sp, color = LocalAppColors.current.textMuted, textAlign = TextAlign.Center)
+            Text(
+                "Powered by 76,000+ child development activities",
+                fontSize  = 12.sp,
+                color     = WarmMuted,
+                fontStyle = FontStyle.Italic,
+                textAlign = TextAlign.Center
+            )
 
             Spacer(Modifier.height(28.dp))
 
-            // Form card
+            // ── Form card ─────────────────────────────────────────────────────
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(LocalAppColors.current.bgSurface)
+                    .background(WarmCard)
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("Set up your child's profile", fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold, color = LocalAppColors.current.textPrimary)
+                Text(
+                    "Set up your child's profile",
+                    fontSize   = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color      = WarmText
+                )
 
+                // Child name field
                 OutlinedTextField(
                     value         = childName,
                     onValueChange = { childName = it; nameError = false },
                     label         = { Text("Child's name *") },
-                    placeholder   = { Text("e.g. Arjun", color = LocalAppColors.current.textMuted) },
-                    leadingIcon   = { Icon(Icons.Default.Person, null, tint = LocalAppColors.current.coral, modifier = Modifier.size(20.dp)) },
+                    placeholder   = { Text("e.g. Arjun", color = WarmMuted) },
+                    leadingIcon   = {
+                        Icon(Icons.Default.Person, null, tint = WarmCoral, modifier = Modifier.size(20.dp))
+                    },
                     singleLine    = true,
                     isError       = nameError,
-                    supportingText = if (nameError) {{ Text("Please enter your child's name", color = LocalAppColors.current.red, fontSize = 11.sp) }} else null,
+                    supportingText = if (nameError) {{
+                        Text("Please enter your child's name", color = WarmRed, fontSize = 11.sp)
+                    }} else null,
                     modifier = Modifier.fillMaxWidth(),
                     shape    = RoundedCornerShape(12.dp),
-                    colors   = onboardingFieldColors()
+                    colors   = warmFieldColors()
                 )
 
+                // Age slider
                 Column {
-                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                        Text("Child's current age", fontSize = 13.sp, color = LocalAppColors.current.textSecondary)
-                        Text(formatAge(months), fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = LocalAppColors.current.coral)
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        Arrangement.SpaceBetween,
+                        Alignment.CenterVertically
+                    ) {
+                        Text("Child's current age", fontSize = 13.sp, color = WarmMuted)
+                        Text(
+                            formatAge(months),
+                            fontSize   = 15.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color      = WarmCoral
+                        )
                     }
                     Spacer(Modifier.height(6.dp))
                     Slider(
-                        value = sliderVal, onValueChange = { sliderVal = it },
-                        valueRange = 0f..144f, steps = 143,
-                        colors = SliderDefaults.colors(
-                            thumbColor         = LocalAppColors.current.coral,
-                            activeTrackColor   = LocalAppColors.current.coral,
-                            inactiveTrackColor = LocalAppColors.current.border
+                        value         = sliderVal,
+                        onValueChange = { sliderVal = it },
+                        valueRange    = 0f..144f,
+                        steps         = 143,
+                        colors        = SliderDefaults.colors(
+                            thumbColor         = WarmCoral,
+                            activeTrackColor   = WarmCoral,
+                            inactiveTrackColor = Color(0xFFFFD6C2)
                         )
                     )
                     Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-                        Text("Newborn", fontSize = 10.sp, color = LocalAppColors.current.textMuted)
-                        Text("12 years", fontSize = 10.sp, color = LocalAppColors.current.textMuted)
+                        Text("Newborn", fontSize = 10.sp, color = WarmMuted)
+                        Text("12 years", fontSize = 10.sp, color = WarmMuted)
                     }
                     if (months > 0) {
                         Spacer(Modifier.height(8.dp))
                         Box(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                                .background(LocalAppColors.current.sky.copy(alpha = 0.12f))
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFE3F2FD))
                                 .padding(10.dp)
                         ) {
-                            Text("Milestones up to ${formatAge(months)} will be auto-completed",
-                                fontSize = 11.sp, color = LocalAppColors.current.sky)
+                            Text(
+                                "✓ All milestones up to ${formatAge(months)} will be auto-completed",
+                                fontSize = 11.sp,
+                                color    = WarmBlue
+                            )
                         }
                     }
                 }
@@ -169,25 +212,35 @@ fun OnboardingScreen(onComplete: (name: String, ageMonths: Int) -> Unit) {
 
             Spacer(Modifier.height(12.dp))
 
-            // Info card
-            Box(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                    .background(LocalAppColors.current.lavender.copy(alpha = 0.10f))
+            // ── Privacy note ──────────────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFFE3F2FD))
                     .padding(12.dp)
             ) {
-                Text("Your data stays on this device. Firebase sync coming soon.",
-                    fontSize = 11.sp, color = LocalAppColors.current.lavender, lineHeight = 16.sp)
+                Text("🔒 ", fontSize = 13.sp)
+                Text(
+                    "Your data stays on this device. Firebase sync coming soon.",
+                    fontSize   = 11.sp,
+                    color      = WarmBlue,
+                    lineHeight = 16.sp
+                )
             }
 
             Spacer(Modifier.height(12.dp))
 
-            // What's included
+            // ── What's included ───────────────────────────────────────────────
             Column(
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                    .background(LocalAppColors.current.bgSurface).padding(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(WarmCard)
+                    .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
-                Text("What's included:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = LocalAppColors.current.textPrimary)
+                Text("What's included:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = WarmText)
                 listOf(
                     "🍼  0–24 months: Baby activities & parent guides",
                     "🎠  2–5 years: Toddler activities & pre-academics",
@@ -195,39 +248,48 @@ fun OnboardingScreen(onComplete: (name: String, ageMonths: Int) -> Unit) {
                     "📚  School: Maths, Science, Social Studies",
                     "🏛️  Civics, Computer Science & Foreign Languages",
                     "🗣️  Language & Communication skills"
-                ).forEach { Text(it, fontSize = 11.sp, color = LocalAppColors.current.textSecondary) }
+                ).forEach {
+                    Text(it, fontSize = 11.sp, color = WarmMuted)
+                }
             }
 
             Spacer(Modifier.height(24.dp))
 
+            // ── CTA button ────────────────────────────────────────────────────
             Button(
-                onClick = { if (childName.isBlank()) nameError = true else onComplete(childName.trim(), months) },
+                onClick = {
+                    if (childName.isBlank()) nameError = true
+                    else onComplete(childName.trim(), months)
+                },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape    = RoundedCornerShape(14.dp),
-                colors   = ButtonDefaults.buttonColors(containerColor = LocalAppColors.current.coral)
+                colors   = ButtonDefaults.buttonColors(containerColor = WarmCoral)
             ) {
                 Text("Start the Journey ✨", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
 
             Spacer(Modifier.height(12.dp))
-            Text("Your progress is saved locally.", fontSize = 10.sp,
-                color = LocalAppColors.current.textMuted, textAlign = TextAlign.Center)
+            Text(
+                "Your progress is saved locally.",
+                fontSize  = 10.sp,
+                color     = WarmMuted,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
 
-
 @Composable
-private fun onboardingFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor      = LocalAppColors.current.coral,
-    unfocusedBorderColor    = LocalAppColors.current.border,
-    focusedLabelColor       = LocalAppColors.current.coral,
-    unfocusedLabelColor     = LocalAppColors.current.textMuted,
-    cursorColor             = LocalAppColors.current.coral,
-    focusedTextColor        = LocalAppColors.current.textPrimary,
-    unfocusedTextColor      = LocalAppColors.current.textPrimary,
-    focusedContainerColor   = LocalAppColors.current.bgSurface,
-    unfocusedContainerColor = LocalAppColors.current.bgSurface
+private fun warmFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor      = WarmCoral,
+    unfocusedBorderColor    = WarmBorder,
+    focusedLabelColor       = WarmCoral,
+    unfocusedLabelColor     = WarmMuted,
+    cursorColor             = WarmCoral,
+    focusedTextColor        = WarmText,
+    unfocusedTextColor      = WarmText,
+    focusedContainerColor   = WarmCard,
+    unfocusedContainerColor = WarmCard
 )
 
 private fun formatAge(months: Int): String = when {

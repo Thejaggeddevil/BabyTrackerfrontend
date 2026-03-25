@@ -57,7 +57,7 @@ import com.example.babyparenting.ui.theme.LocalAppColors
 
 @Composable
 fun LoginScreen(
-    onParentLogin: () -> Unit,
+    onParentLogin: () -> Unit,   // → AuthScreen (Login/Register)
     onAdminLogin: (password: String) -> Boolean
 ) {
     var showAdminForm by remember { mutableStateOf(false) }
@@ -92,7 +92,7 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Logo
+            // ── Logo ──────────────────────────────────────────────────────────
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -100,7 +100,9 @@ fun LoginScreen(
                     .scale(logoScale.value)
                     .clip(CircleShape)
                     .background(
-                        Brush.linearGradient(listOf(LocalAppColors.current.coral, LocalAppColors.current.peach))
+                        Brush.linearGradient(
+                            listOf(LocalAppColors.current.coral, LocalAppColors.current.peach)
+                        )
                     )
             ) {
                 Text("👶", fontSize = 38.sp)
@@ -109,64 +111,106 @@ fun LoginScreen(
             Spacer(Modifier.height(22.dp))
             Text(
                 "Baby Parenting Companion",
-                fontSize = 22.sp, fontWeight = FontWeight.ExtraBold,
-                color = LocalAppColors.current.textPrimary, textAlign = TextAlign.Center
+                fontSize   = 22.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color      = LocalAppColors.current.textPrimary,
+                textAlign  = TextAlign.Center
             )
             Spacer(Modifier.height(6.dp))
             Text(
                 "Track every milestone with love",
-                fontSize = 13.sp, color = LocalAppColors.current.textSecondary, textAlign = TextAlign.Center
+                fontSize  = 13.sp,
+                color     = LocalAppColors.current.textSecondary,
+                textAlign = TextAlign.Center
             )
 
             Spacer(Modifier.height(44.dp))
 
             if (!showAdminForm) {
-                Text("Who is using the app?", fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold, color = LocalAppColors.current.textSecondary)
+                // ── Role selection ────────────────────────────────────────────
+                Text(
+                    "Who is using the app?",
+                    fontSize   = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color      = LocalAppColors.current.textSecondary
+                )
                 Spacer(Modifier.height(20.dp))
 
+                // "I'm a Parent" → AuthScreen
                 RoleCard(
-                    emoji = "👨‍👩‍👧", title = "I'm a Parent",
-                    subtitle = "Track my child's milestones",
-                    accentColor = LocalAppColors.current.coral, onClick = onParentLogin
+                    emoji       = "👨‍👩‍👧",
+                    title       = "I'm a Parent",
+                    subtitle    = "Track my child's milestones",
+                    accentColor = LocalAppColors.current.coral,
+                    onClick     = onParentLogin   // ← goes to AuthScreen
                 )
                 Spacer(Modifier.height(14.dp))
                 RoleCard(
-                    emoji = "🛡️", title = "Admin Login",
-                    subtitle = "Manage & add milestones",
-                    accentColor = LocalAppColors.current.lavender, onClick = { showAdminForm = true }
+                    emoji       = "🛡️",
+                    title       = "Admin Login",
+                    subtitle    = "Manage & add milestones",
+                    accentColor = LocalAppColors.current.lavender,
+                    onClick     = { showAdminForm = true }
                 )
+
             } else {
+                // ── Admin password form ───────────────────────────────────────
                 Box(
-                    Modifier.size(60.dp).clip(CircleShape).background(LocalAppColors.current.lavender),
+                    Modifier
+                        .size(60.dp)
+                        .clip(CircleShape)
+                        .background(LocalAppColors.current.lavender),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Default.Lock, null, tint = Color.White, modifier = Modifier.size(28.dp))
                 }
                 Spacer(Modifier.height(16.dp))
-                Text("Admin Login", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = LocalAppColors.current.textPrimary)
-                Text("Enter your admin password", fontSize = 13.sp, color = LocalAppColors.current.textSecondary, textAlign = TextAlign.Center)
+                Text(
+                    "Admin Login",
+                    fontSize   = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color      = LocalAppColors.current.textPrimary
+                )
+                Text(
+                    "Enter your admin password",
+                    fontSize  = 13.sp,
+                    color     = LocalAppColors.current.textSecondary,
+                    textAlign = TextAlign.Center
+                )
 
                 if (attempts >= 3) {
                     Spacer(Modifier.height(8.dp))
-                    Text("Hint: default password is admin123", fontSize = 11.sp, color = LocalAppColors.current.red)
+                    Text(
+                        "Hint: default password is admin123",
+                        fontSize = 11.sp,
+                        color    = LocalAppColors.current.red
+                    )
                 }
                 if (passwordError) {
                     Spacer(Modifier.height(6.dp))
-                    Text("Incorrect password. Try again.", fontSize = 11.sp, color = LocalAppColors.current.red)
+                    Text(
+                        "Incorrect password. Try again.",
+                        fontSize = 11.sp,
+                        color    = LocalAppColors.current.red
+                    )
                 }
 
                 Spacer(Modifier.height(20.dp))
 
                 OutlinedTextField(
-                    value = password, onValueChange = { password = it; passwordError = false },
-                    label = { Text("Password", color = LocalAppColors.current.textSecondary) },
-                    singleLine = true,
-                    visualTransformation = if (showPwd) VisualTransformation.None else PasswordVisualTransformation(),
+                    value         = password,
+                    onValueChange = { password = it; passwordError = false },
+                    label         = { Text("Password", color = LocalAppColors.current.textSecondary) },
+                    singleLine    = true,
+                    visualTransformation = if (showPwd) VisualTransformation.None
+                    else PasswordVisualTransformation(),
                     trailingIcon = {
                         IconButton(onClick = { showPwd = !showPwd }) {
-                            Icon(if (showPwd) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                null, tint = LocalAppColors.current.textMuted)
+                            Icon(
+                                if (showPwd) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                null,
+                                tint = LocalAppColors.current.textMuted
+                            )
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -185,7 +229,12 @@ fun LoginScreen(
                     colors   = ButtonDefaults.buttonColors(containerColor = LocalAppColors.current.lavender),
                     shape    = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Login as Admin", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(
+                        "Login as Admin",
+                        fontSize   = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color      = Color.White
+                    )
                 }
 
                 Spacer(Modifier.height(8.dp))
@@ -198,7 +247,13 @@ fun LoginScreen(
 }
 
 @Composable
-private fun RoleCard(emoji: String, title: String, subtitle: String, accentColor: Color, onClick: () -> Unit) {
+private fun RoleCard(
+    emoji: String,
+    title: String,
+    subtitle: String,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -211,25 +266,41 @@ private fun RoleCard(emoji: String, title: String, subtitle: String, accentColor
     ) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.size(50.dp).clip(CircleShape).background(accentColor.copy(alpha = 0.15f))
-        ) { Text(emoji, fontSize = 22.sp) }
+            modifier = Modifier
+                .size(50.dp)
+                .clip(CircleShape)
+                .background(accentColor.copy(alpha = 0.15f))
+        ) {
+            Text(emoji, fontSize = 22.sp)
+        }
 
         Spacer(Modifier.width(14.dp))
 
         Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = LocalAppColors.current.textPrimary)
-            Text(subtitle, fontSize = 12.sp, color = LocalAppColors.current.textSecondary)
+            Text(
+                title,
+                fontSize   = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color      = LocalAppColors.current.textPrimary
+            )
+            Text(
+                subtitle,
+                fontSize = 12.sp,
+                color    = LocalAppColors.current.textSecondary
+            )
         }
 
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.size(32.dp).clip(CircleShape).background(accentColor)
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(accentColor)
         ) {
             Text("→", fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Bold)
         }
     }
 }
-
 
 @Composable
 private fun darkFieldColors() = OutlinedTextFieldDefaults.colors(
