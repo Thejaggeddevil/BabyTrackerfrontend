@@ -26,6 +26,9 @@ import com.example.babyparenting.viewmodel.AdminViewModel
 import com.example.babyparenting.viewmodel.AuthViewModel
 import com.example.babyparenting.viewmodel.JourneyViewModel
 import com.example.babyparenting.viewmodel.ParentViewModel
+import com.example.babyparenting.ui.screens.millionaire.MillionaireClubScreen
+import com.example.babyparenting.ui.screens.millionaire.StrategyDetailScreen
+import com.example.babyparenting.ui.viewmodel.MillionaireViewModel
 
 object Routes {
     const val LOGIN         = "login"
@@ -38,6 +41,8 @@ object Routes {
     const val ADMIN         = "admin"
     const val PARENT_HUB    = "parent_hub"
     const val PARENT_DETAIL = "parent_detail"
+    const val MILLIONAIRE = "millionaire"
+    const val STRATEGY_DETAIL = "strategy_detail"
 }
 
 @Composable
@@ -53,12 +58,12 @@ fun AppNavigation(
     val parentVm:  ParentViewModel  = viewModel()
     val authVm:    AuthViewModel    = viewModel()
 
-  val startDestination = Routes.JOURNEY
-      //when {
-//        authVm.isLoggedIn() && journeyVm.getChildName().isNotBlank() -> Routes.JOURNEY
-//        authVm.isLoggedIn()                                          -> Routes.ONBOARDING
-//        else                                                         -> Routes.LOGIN
-//    }
+  val startDestination =
+      when {
+      authVm.isLoggedIn() && journeyVm.getChildName().isNotBlank() -> Routes.JOURNEY
+        authVm.isLoggedIn()                                          -> Routes.ONBOARDING
+        else                                                         -> Routes.LOGIN
+    }
 
     NavHost(navController = navController, startDestination = startDestination) {
 
@@ -73,7 +78,7 @@ fun AppNavigation(
                             popUpTo(Routes.LOGIN) { inclusive = true }
                         }
                     }
-                    ok
+                ok
                 }
             )
         }
@@ -176,6 +181,7 @@ fun AppNavigation(
                 onLogout  = {
                     authVm.logout()
                     session.logout()
+                    //journeyVm.clearAllData()
                     // NOTE: We do NOT reset the trial on logout.
                     // If user logs back in, their trial continues from where it left off.
                     navController.navigate(Routes.LOGIN) {
@@ -194,6 +200,34 @@ fun AppNavigation(
                     parentVm.openGuide(guide)
                     navController.navigate(Routes.PARENT_DETAIL)
                 }
+            )
+        }
+        // ── Millionaire Club ─────────────────────────────
+        composable(Routes.MILLIONAIRE) {
+            val vm: MillionaireViewModel = viewModel()
+
+            MillionaireClubScreen(
+                viewModel = vm,
+                onStrategyClick = { strategyId ->
+                    navController.navigate("${Routes.STRATEGY_DETAIL}/$strategyId")
+                },
+                onActivityClick = { activityId, strategyId ->
+                    // abhi ignore kar sakti hai
+                }
+            )
+        }
+
+// ── Strategy Detail ─────────────────────────────
+        composable("${Routes.STRATEGY_DETAIL}/{id}") { backStackEntry ->
+            val vm: MillionaireViewModel = viewModel()
+            val id = backStackEntry.arguments?.getString("id")?.toInt() ?: 0
+
+            StrategyDetailScreen(
+                strategyId = id,
+                strategyTitle = "Strategy",
+                viewModel = vm,
+                onActivityClick = { _, _ -> },
+                onBackClick = { navController.popBackStack() }
             )
         }
 

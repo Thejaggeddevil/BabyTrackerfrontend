@@ -156,6 +156,7 @@ fun BabyJourneyScreen(
                 isDark          = c.isDark,
                 onParentHub     = { menuExpanded = false; onParentHubTapped() },
                 onMilestones    = { menuExpanded = false },
+                onMillionaire   = { menuExpanded = false },
                 onSettings      = { menuExpanded = false; onSettingsTapped() },
                 onToggleTheme   = { menuExpanded = false; onToggleTheme() }
             )
@@ -187,6 +188,7 @@ private fun HamburgerMenu(
     isDark: Boolean,
     onParentHub: () -> Unit,
     onMilestones: () -> Unit,
+    onMillionaire: () -> Unit,
     onSettings: () -> Unit,
     onToggleTheme: () -> Unit
 ) {
@@ -204,7 +206,7 @@ private fun HamburgerMenu(
     ) {
         MenuItem(icon = Icons.Default.AdminPanelSettings, label = "Parent Hub",  color = c.lavender, onClick = onParentHub)
         MenuDivider()
-        MenuItem(icon = Icons.Default.Stars,              label = "Millennial",   color = c.coral,    onClick = onMilestones)
+        MenuItem(icon = Icons.Default.Stars,              label = "Millionaire Baby Club",   color = c.coral,    onClick = onMillionaire)
         MenuDivider()
         MenuItem(icon = Icons.Default.Person,             label = "Settings",     color = c.sky,      onClick = onSettings)
         MenuDivider()

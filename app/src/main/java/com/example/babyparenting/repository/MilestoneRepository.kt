@@ -36,7 +36,21 @@ import kotlinx.coroutines.withContext
  *         inline via a flag, so the ViewModel's existing launch{initialLoad()}
  *         picks up a clean slate every time.
  */
+
 class MilestoneRepository(private val context: Context) {
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("journey_progress", Context.MODE_PRIVATE)
@@ -213,6 +227,12 @@ class MilestoneRepository(private val context: Context) {
     private fun mergeAndEmit() {
         val completed = getCompletedIds()
         mergeAndEmitWithIds(completed)
+    }
+    fun clearAllData() {
+        prefs.edit().clear().apply()
+        resetLoadState()
+        _milestones.value = emptyList()
+        _progress.value = JourneyProgress(0, 0, 0)
     }
 
     private fun mergeAndEmitWithIds(completed: Set<String>) {
