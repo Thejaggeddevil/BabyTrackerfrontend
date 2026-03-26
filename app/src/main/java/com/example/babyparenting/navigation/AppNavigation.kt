@@ -53,12 +53,11 @@ fun AppNavigation(
     val parentVm:  ParentViewModel  = viewModel()
     val authVm:    AuthViewModel    = viewModel()
 
-  val startDestination = Routes.JOURNEY
-      //when {
-//        authVm.isLoggedIn() && journeyVm.getChildName().isNotBlank() -> Routes.JOURNEY
-//        authVm.isLoggedIn()                                          -> Routes.ONBOARDING
-//        else                                                         -> Routes.LOGIN
-//    }
+  val startDestination = when {
+      authVm.isLoggedIn() && journeyVm.getChildName().isNotBlank() -> Routes.JOURNEY
+       authVm.isLoggedIn()                                          -> Routes.ONBOARDING
+       else                                                         -> Routes.LOGIN
+   }
 
     NavHost(navController = navController, startDestination = startDestination) {
 
