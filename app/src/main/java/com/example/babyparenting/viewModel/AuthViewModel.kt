@@ -252,6 +252,6 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     companion object {
-        private const val BASE_URL = "http://192.168.1.15:8000"
+        private const val BASE_URL = "http://192.168.1.7:8000"
     }
 }

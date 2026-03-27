@@ -2,9 +2,9 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("dagger.hilt.android.plugin")
-    kotlin("kapt")
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.22"
+    alias(libs.plugins.ksp)
+    id("com.google.dagger.hilt.android")
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21"
 }
 
 android {
@@ -37,7 +37,6 @@ android {
 
     kotlinOptions {
         jvmTarget = "11"
-        freeCompilerArgs += listOf("-Xuse-kapt-stub-compiler")  // ← THIS LINE FIXES EVERYTHING
     }
 
     buildFeatures {
@@ -61,7 +60,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
 
     implementation("com.google.dagger:hilt-android:2.51")
-    kapt("com.google.dagger:hilt-compiler:2.51")
+    ksp("com.google.dagger:hilt-compiler:2.51")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
@@ -82,12 +81,4 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-}
-
-kapt {
-    useBuildCache = true
-    javacOptions {
-        option("-source", "11")
-        option("-target", "11")
-    }
 }
