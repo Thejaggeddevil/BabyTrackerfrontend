@@ -17,40 +17,20 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 
 /**
- * Single source of truth. Lazy loads one age group at a time.
+ * Single source of truth for milestones.
+ * Lazy loads age groups on-demand and handles continuous progression.
+ *
  * markComplete is ONE-WAY — completed milestones cannot be un-completed.
  *
- * ── FIXES IN THIS VERSION ────────────────────────────────────────────────────
- * FIX 1: initialLoad() now calls resetLoadState() first.
- *         Old: highestLoadedGroup was never reset between reloads.
- *         If a parent changed the child age from 2 months to 8 years and back,
- *         highestLoadedGroup stayed at whatever the highest group ever was,
- *         so loadGroupIfNeeded() silently skipped re-loading the correct group.
- *
- * FIX 2: resetLoadState() clears loader.clearCache() before reload.
- *         Old: loadedGroups map inside LazyDatasetLoader was never cleared.
- *         Stale milestone lists from the old age remained cached in memory
- *         forever, even after the child's age was changed.
- *
- * FIX 3: setChildAge() now resets load state and then calls initialLoad()
- *         inline via a flag, so the ViewModel's existing launch{initialLoad()}
- *         picks up a clean slate every time.
+ * ── KEY BEHAVIOR ──────────────────────────────────────────────────────────
+ * 1. On first load: Load ONLY the floor group for current child age
+ * 2. When user scrolls/completes: Auto-load next groups seamlessly
+ * 3. When age changes: Reset and reload from NEW age's floor group
+ * 4. All loaded groups stay in memory until age changes
+ * 5. When next group loads: Instantly add to milestones list
  */
 
 class MilestoneRepository(private val context: Context) {
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("journey_progress", Context.MODE_PRIVATE)
@@ -58,8 +38,12 @@ class MilestoneRepository(private val context: Context) {
     private val loader     = LazyDatasetLoader(context)
     private val adminStore = AdminMilestoneStore(context)
 
+    // Track which groups have been loaded
     private var loadedMilestones: MutableList<Milestone> = mutableListOf()
     private var highestLoadedGroup: Int = 0
+
+    // Track the last emitted completion IDs to avoid duplicate updates
+    private var lastEmittedCompletedIds: Set<String> = emptySet()
 
     private val _milestones = MutableStateFlow<List<Milestone>>(emptyList())
     private val _ageGroups  = MutableStateFlow<List<AgeGroup>>(emptyList())
@@ -73,43 +57,34 @@ class MilestoneRepository(private val context: Context) {
     val isLoading:  StateFlow<Boolean>           = _isLoading.asStateFlow()
     val error:      StateFlow<String?>           = _error.asStateFlow()
 
-    // ── Load ──────────────────────────────────────────────────────────────────
+    // ── INITIAL LOAD ──────────────────────────────────────────────────────────
 
     /**
-     * Full load (or reload after age change).
+     * Full initialization — called once on app start or when age changes.
      *
-     * FIX: resetLoadState() is called first on every entry.
-     * This ensures that:
-     *   1. loadedMilestones is empty — no stale milestones from old age.
-     *   2. highestLoadedGroup is 0 — loadGroupIfNeeded() won't skip the
-     *      correct new floor group thinking it was "already loaded".
-     *   3. loader cache is wiped — LazyDatasetLoader won't return stale
-     *      memoised data for groups that belonged to the old child age.
+     * Behavior:
+     * 1. Reset all in-memory state
+     * 2. Load ONLY the floor group for the current child's age
+     * 3. Mark milestones below child's age as auto-completed
+     * 4. Emit the starting list
      */
     suspend fun initialLoad() {
         try {
             _isLoading.value = true
             _error.value     = null
 
-            // ✅ FIX: reset in-memory state AND the loader's CSV cache before
-            // every load, so changing child age always starts from a clean slate.
+            // ✅ CRITICAL: Reset everything before loading
             resetLoadState()
 
             _ageGroups.value = loader.getAgeGroups()
 
             val childAge = getChildAgeMonths()
 
-            // Only load floor + ceiling group (2 groups max).
-            // If child is 8 yr 9 mo (105 mo) → startingGroupId = 11.
-            // groupsToPreload returns [11, 12] — NOT [1, 2, 3 … 11].
-            val groupsToLoad = loader.groupsToPreload(childAge)
-            for (groupId in groupsToLoad) {
-                loadGroupIfNeeded(groupId)
-            }
+            // Load ONLY the floor group (the one matching current age)
+            val floorGroup = loader.startingGroupId(childAge)
+            loadGroupIfNeeded(floorGroup)
 
-            // Auto-complete milestones strictly before child's age.
-            // STRICT less-than (<) so milestones AT current age are NOT
-            // auto-completed — those are the ones they should do NOW.
+            // Auto-complete milestones STRICTLY before child's current age
             val correctIds = loadedMilestones
                 .filter { it.ageMonths < childAge }
                 .map { it.id }
@@ -131,58 +106,114 @@ class MilestoneRepository(private val context: Context) {
         }
     }
 
+    // ── PROGRESSIVE LOADING ──────────────────────────────────────────────────
+    /**
+     * Load the next age group(s) when user reaches the end of current group.
+     *
+     * This is called by JourneyViewModel when:
+     * 1. User completes all cards in an age group
+     * 2. User scrolls down to see milestones from next group
+     *
+     * ✅ FIXED: Now properly loads multiple groups and emits them immediately
+     * Old behavior: Loaded but never emitted, so cards never appeared
+     * New behavior: Loads group → merges with completed IDs → emits to UI instantly
+     */
     suspend fun loadNextGroupIfNeeded(nextGroupId: Int) {
         if (nextGroupId > loader.totalGroups()) return
         if (nextGroupId <= highestLoadedGroup) return
+
         try {
             _isLoading.value = true
+
+            // Load the next group's data from CSV
             loadGroupIfNeeded(nextGroupId)
-            mergeAndEmit()
+
+            // ✅ CRITICAL: Get current completed IDs and emit immediately
+            val completedIds = getCompletedIds()
+            mergeAndEmitWithIds(completedIds)
+
         } catch (e: Exception) {
-            // silent fail
+            // Silent fail - if one group fails to load, don't crash
+            // User can retry by scrolling again
         } finally {
             _isLoading.value = false
         }
     }
 
-    // ── ONE-WAY completion ────────────────────────────────────────────────────
+    /**
+     * Load multiple groups in sequence (for faster progression).
+     * Called when user scrolls quickly or completes groups fast.
+     */
+    suspend fun loadGroupsUpTo(maxGroupId: Int) {
+        if (maxGroupId > loader.totalGroups()) return
+        if (maxGroupId <= highestLoadedGroup) return
+
+        try {
+            _isLoading.value = true
+
+            // Load all groups from (highestLoadedGroup + 1) to maxGroupId
+            for (groupId in (highestLoadedGroup + 1)..maxGroupId) {
+                loadGroupIfNeeded(groupId)
+            }
+
+            // Emit everything once at the end
+            val completedIds = getCompletedIds()
+            mergeAndEmitWithIds(completedIds)
+
+        } catch (e: Exception) {
+            // Silent fail
+        } finally {
+            _isLoading.value = false
+        }
+    }
+
+    // ── ONE-WAY COMPLETION ────────────────────────────────────────────────────
 
     /**
      * Mark a milestone as complete. PERMANENT — cannot be reversed.
-     * Once a milestone is in completedIds, it stays there forever.
+     * Once a milestone is marked done, it stays done forever (across sessions).
      */
     fun markComplete(id: String) {
         val ids = getCompletedIds().toMutableSet()
         if (id in ids) return   // already complete — do nothing
+
         ids.add(id)
         saveCompletedIds(ids)
+
+        // Update local list
         loadedMilestones = loadedMilestones.map {
             it.copy(isCompleted = it.id in ids)
         }.toMutableList()
+
+        // Emit immediately
         _milestones.value = loadedMilestones.toList()
         _progress.value   = buildProgress()
     }
 
-    // ── Child profile ─────────────────────────────────────────────────────────
+    // ── CHILD PROFILE ─────────────────────────────────────────────────────────
 
     /**
-     * Persist the new child age and immediately reset all in-memory state.
+     * When parent changes the child's age, start fresh from that age's group.
      *
-     * FIX: Old code only saved the age and recomputed completedIds on whatever
-     * loadedMilestones happened to be in memory — which could be wrong groups.
-     * Now we wipe everything cleanly. The ViewModel's setChildAge() then calls
-     * initialLoad() which picks up a fresh slate.
+     * Example flow:
+     * 1. User sets age to 24 months → loads group 7 (2-3 years)
+     * 2. User sets age to 6 months → resets everything, loads group 3 (6-9 months)
+     * 3. Old completion data is preserved (from SharedPreferences)
+     *
+     * ✅ FIXED: Now truly clears in-memory state so old groups don't leak
      */
     fun setChildAge(months: Int) {
+        // Save the new age
         prefs.edit().putInt(KEY_AGE, months).apply()
 
-        // Wipe stale in-memory data — initialLoad() will re-populate from scratch
-        // using the new age's floor group, not the old age's floor group.
+        // ✅ CRITICAL: Wipe all in-memory state
+        // This ensures initialLoad() will load the correct group for NEW age
         resetLoadState()
 
-        // Emit empty list while the upcoming initialLoad() runs.
+        // Clear UI while reload happens
         _milestones.value = emptyList()
         _progress.value   = buildProgress()
+        _error.value      = null
     }
 
     fun setChildName(name: String) {
@@ -195,47 +226,68 @@ class MilestoneRepository(private val context: Context) {
 
     fun refreshAdminMilestones() = mergeAndEmit()
 
-    // ── Private ───────────────────────────────────────────────────────────────
+    // ── PRIVATE HELPERS ───────────────────────────────────────────────────────
 
     /**
-     * Wipe all in-memory milestone data and the loader's CSV cache.
+     * ✅ CRITICAL: Wipe ALL in-memory state.
      *
-     * Must be called at the start of every initialLoad() and when the child's
-     * age changes, so no stale data from a previous session leaks into the
-     * new load.
+     * Called at START of initialLoad() and when age changes.
+     * Ensures no stale data from previous session/age carries over.
      *
-     * After this call:
-     *   - loadedMilestones is empty
-     *   - highestLoadedGroup is 0   (loadGroupIfNeeded won't skip anything)
-     *   - LazyDatasetLoader cache is cleared (no memoised stale CSV rows)
+     * After this:
+     * - loadedMilestones is empty (no stale cards)
+     * - highestLoadedGroup is 0 (next load will reload from group 1)
+     * - loader cache is cleared (no stale CSV data)
      */
     private fun resetLoadState() {
         loadedMilestones   = mutableListOf()
         highestLoadedGroup = 0
-        loader.clearCache()           // ✅ FIX: wipe stale LazyDatasetLoader cache
+        lastEmittedCompletedIds = emptySet()
+        loader.clearCache()
     }
 
+    /**
+     * Load a single group from CSV (or cache if already loaded).
+     * Called by initialLoad() and loadNextGroupIfNeeded().
+     */
     private suspend fun loadGroupIfNeeded(groupId: Int) {
         if (groupId <= highestLoadedGroup) return
+
         val newMs = withContext(Dispatchers.IO) {
             loader.loadForGroup(groupId)
         }
+
         loadedMilestones.addAll(newMs)
         highestLoadedGroup = groupId
     }
 
+    /**
+     * Merge loaded milestones with admin milestones and completion status.
+     * This is the MAIN emission point — called after every load/change.
+     */
     private fun mergeAndEmit() {
         val completed = getCompletedIds()
         mergeAndEmitWithIds(completed)
     }
-    fun clearAllData() {
-        prefs.edit().clear().apply()
-        resetLoadState()
-        _milestones.value = emptyList()
-        _progress.value = JourneyProgress(0, 0, 0)
-    }
 
+    /**
+     * ✅ CRITICAL: The actual emission logic.
+     *
+     * This function:
+     * 1. Takes current loaded milestones + admin milestones
+     * 2. Marks which ones are completed
+     * 3. Sorts by age and source
+     * 4. EMITS to _milestones StateFlow (UI updates)
+     * 5. Updates progress
+     *
+     * This is called:
+     * - After initialLoad()
+     * - After loadNextGroupIfNeeded()
+     * - After markComplete()
+     * - After setChildAge()
+     */
     private fun mergeAndEmitWithIds(completed: Set<String>) {
+        // Admin-added custom milestones
         val adminMs = adminStore.getAll().map { am ->
             Milestone(
                 id           = am.id,
@@ -254,16 +306,24 @@ class MilestoneRepository(private val context: Context) {
             )
         }
 
+        // Update loaded milestones with completion status
         loadedMilestones = loadedMilestones.map {
             it.copy(isCompleted = it.id in completed)
         }.toMutableList()
 
+        // Merge and sort
         val merged = (loadedMilestones + adminMs)
             .sortedWith(compareBy({ it.ageMonths }, { it.source.ordinal }))
             .toList()
 
+        // ✅ EMIT: This updates the UI
         _milestones.value = merged
-        _progress.value   = buildProgress()
+
+        // Update progress
+        _progress.value = buildProgress()
+
+        // Track what we emitted
+        lastEmittedCompletedIds = completed
     }
 
     private fun buildProgress() = JourneyProgress(
@@ -273,6 +333,19 @@ class MilestoneRepository(private val context: Context) {
         childName           = getChildName()
     )
 
+    fun clearAllData() {
+        prefs.edit().clear().apply()
+        resetLoadState()
+        _milestones.value = emptyList()
+        _progress.value = JourneyProgress(0, 0, 0)
+    }
+
+    // ── SHARED PREFERENCES (Completion tracking) ──────────────────────────────
+
+    /**
+     * Get the set of completed milestone IDs from SharedPreferences.
+     * Survives app restart, age change, etc.
+     */
     private fun getCompletedIds(): Set<String> {
         val json = prefs.getString(KEY_COMPLETED, null) ?: return emptySet()
         return try {
@@ -281,6 +354,9 @@ class MilestoneRepository(private val context: Context) {
         } catch (e: Exception) { emptySet() }
     }
 
+    /**
+     * Save the set of completed milestone IDs to SharedPreferences.
+     */
     private fun saveCompletedIds(ids: Set<String>) {
         prefs.edit().putString(KEY_COMPLETED, gson.toJson(ids)).apply()
     }

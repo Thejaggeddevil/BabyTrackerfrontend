@@ -19,7 +19,9 @@ import com.example.babyparenting.ui.theme.LocalAppColors
 import com.example.babyparenting.viewmodel.JourneyViewModel
 import com.razorpay.Checkout
 import com.razorpay.PaymentResultListener
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity(), PaymentResultListener {
 
     // Same ViewModel instance jo Compose use karta hai

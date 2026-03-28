@@ -2,7 +2,7 @@ package com.example.babyparenting.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.babyparenting.data.api.ProgressSummary
+import com.example.babyparenting.data.model.ProgressSummary
 import com.example.babyparenting.data.model.*
 import com.example.babyparenting.data.repository.MillionaireRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,8 +14,6 @@ import javax.inject.Inject
 class MillionaireViewModel @Inject constructor(
     private val repository: MillionaireRepository
 ) : ViewModel() {
-
-    // ============ UI State Flow ============
 
     private val _strategiesState = MutableStateFlow<StrategiesUiState>(StrategiesUiState.Loading)
     val strategiesState: StateFlow<StrategiesUiState> = _strategiesState.asStateFlow()
@@ -32,21 +30,15 @@ class MillionaireViewModel @Inject constructor(
     private val _completionState = MutableStateFlow<CompletionUiState>(CompletionUiState.Idle)
     val completionState: StateFlow<CompletionUiState> = _completionState.asStateFlow()
 
-    // ============ Reactive Data ============
-
     val completedActivities: Flow<Set<Int>> = repository.getCompletedActivities()
     val childAge: Flow<Int> = repository.getChildAge()
     val userId: Flow<String> = repository.getUserId()
-
-    // ============ Initialization ============
 
     init {
         loadStrategies()
         loadDailyActivity()
         loadProgress()
     }
-
-    // ============ Public Methods ============
 
     fun loadStrategies() {
         viewModelScope.launch {
@@ -80,6 +72,7 @@ class MillionaireViewModel @Inject constructor(
 
     fun markActivityAsCompleted(activityId: Int) {
         viewModelScope.launch {
+            _completionState.value = CompletionUiState.Loading
             val userId = repository.getUserId().firstOrNull() ?: "default_user"
             val result = repository.completeActivity(userId, activityId)
             result.fold(
@@ -113,7 +106,6 @@ class MillionaireViewModel @Inject constructor(
             _dailyActivityState.value = DailyActivityUiState.Loading
             val userId = repository.getUserId().firstOrNull() ?: "default_user"
             val age = repository.getChildAge().firstOrNull() ?: 3
-
             val result = repository.getDailyActivity(userId, age)
             result.fold(
                 onSuccess = { activity ->
@@ -130,7 +122,6 @@ class MillionaireViewModel @Inject constructor(
         viewModelScope.launch {
             _progressState.value = ProgressUiState.Loading
             val userId = repository.getUserId().firstOrNull() ?: "default_user"
-
             val result = repository.getProgressSummary(userId)
             result.fold(
                 onSuccess = { summary ->
@@ -178,6 +169,7 @@ sealed class ProgressUiState {
 
 sealed class CompletionUiState {
     object Idle : CompletionUiState()
+    object Loading : CompletionUiState()
     data class Success(val message: String) : CompletionUiState()
     data class Error(val message: String) : CompletionUiState()
 }

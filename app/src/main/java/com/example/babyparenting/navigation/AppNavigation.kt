@@ -5,7 +5,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
-import androidx.hilt.navigation.compose.hiltViewModel  // ✅ ADD THIS IMPORT
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -29,7 +29,16 @@ import com.example.babyparenting.viewmodel.JourneyViewModel
 import com.example.babyparenting.viewmodel.ParentViewModel
 import com.example.babyparenting.ui.screens.millionaire.MillionaireClubScreen
 import com.example.babyparenting.ui.screens.millionaire.StrategyDetailScreen
+import com.example.babyparenting.ui.screens.millionaire.ActivityDetailScreen
 import com.example.babyparenting.ui.viewmodel.MillionaireViewModel
+import com.example.babyparenting.data.model.DailyActivityResponse
+import com.example.babyparenting.data.model.ActivityDetail
+import com.example.babyparenting.data.model.Strategy
+import com.example.babyparenting.data.model.Activity
+import com.example.babyparenting.data.model.BasicInfo
+import com.example.babyparenting.data.model.MetaInfo
+import com.example.babyparenting.data.model.ParentGuidance
+import com.example.babyparenting.data.model.HelpSection
 
 object Routes {
     const val LOGIN         = "login"
@@ -44,6 +53,7 @@ object Routes {
     const val PARENT_DETAIL = "parent_detail"
     const val MILLIONAIRE = "millionaire"
     const val STRATEGY_DETAIL = "strategy_detail"
+    const val ACTIVITY_DETAIL = "activity_detail"
 }
 
 @Composable
@@ -53,18 +63,18 @@ fun AppNavigation(
 ) {
     val context   = LocalContext.current
     val session   = remember { SessionManager(context) }
-    val subMgr    = remember { SubscriptionManager(context) }   // ← trial manager
+    val subMgr    = remember { SubscriptionManager(context) }
     val journeyVm: JourneyViewModel = viewModel()
     val adminVm:   AdminViewModel   = viewModel()
     val parentVm:  ParentViewModel  = viewModel()
     val authVm:    AuthViewModel    = viewModel()
 
-    val startDestination = Routes.JOURNEY
-//      when {
-//      authVm.isLoggedIn() && journeyVm.getChildName().isNotBlank() -> Routes.JOURNEY
-//        authVm.isLoggedIn()                                          -> Routes.ONBOARDING
-//        else                                                         -> Routes.LOGIN
-//    }
+    val startDestination =
+        when {
+            authVm.isLoggedIn() && journeyVm.getChildName().isNotBlank() -> Routes.JOURNEY
+            authVm.isLoggedIn()                                          -> Routes.ONBOARDING
+            else                                                         -> Routes.LOGIN
+        }
 
     NavHost(navController = navController, startDestination = startDestination) {
 
@@ -90,13 +100,7 @@ fun AppNavigation(
                 viewModel     = authVm,
                 onAuthSuccess = {
                     session.setLoggedIn(true)
-
-                    // ── TRIAL ACTIVATION ──────────────────────────────────────
-                    // Pehli baar login → 14-din trial shuru karo.
-                    // subMgr.activateTrial() internally checks: agar already
-                    // started hai toh kuch nahi karta (idempotent).
                     subMgr.activateTrial()
-                    // ─────────────────────────────────────────────────────────
 
                     val hasProfile = journeyVm.getChildName().isNotBlank()
                     if (hasProfile) {
@@ -142,7 +146,7 @@ fun AppNavigation(
                     }
                 },
                 onSettingsTapped  = { navController.navigate(Routes.SETTINGS) },
-                onMillionaireTapped = { navController.navigate(Routes.MILLIONAIRE) },  // ✅ FIXED: Added callback
+                onMillionaireTapped = { navController.navigate(Routes.MILLIONAIRE) },
                 onParentHubTapped = { navController.navigate(Routes.PARENT_HUB) },
                 onToggleTheme     = onToggleTheme
             )
@@ -183,9 +187,6 @@ fun AppNavigation(
                 onLogout  = {
                     authVm.logout()
                     session.logout()
-                    //journeyVm.clearAllData()
-                    // NOTE: We do NOT reset the trial on logout.
-                    // If user logs back in, their trial continues from where it left off.
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }
@@ -205,10 +206,10 @@ fun AppNavigation(
             )
         }
 
-        // ── Millionaire Club ─────────────────────────────────────────────────
-        // ✅ FIXED: Changed viewModel() to hiltViewModel()
+        // ── Millionaire Club ──────────────────────────────────────────────────
+        // ✅ FIXED: Proper Hilt viewModel usage
         composable(Routes.MILLIONAIRE) {
-            val vm: MillionaireViewModel = hiltViewModel()  // ✅ USE HILT VERSION
+            val vm: MillionaireViewModel = hiltViewModel()
 
             MillionaireClubScreen(
                 viewModel = vm,
@@ -216,23 +217,93 @@ fun AppNavigation(
                     navController.navigate("${Routes.STRATEGY_DETAIL}/$strategyId")
                 },
                 onActivityClick = { activityId, strategyId ->
-                    // abhi ignore kar sakti hai
+                    navController.navigate("${Routes.ACTIVITY_DETAIL}/$activityId/$strategyId")
                 }
             )
         }
 
-        // ── Strategy Detail ─────────────────────────────────────────────────
-        // ✅ FIXED: Changed viewModel() to hiltViewModel()
+        // ── Strategy Detail ───────────────────────────────────────────────────
+        // ✅ FIXED: Activity navigation properly wired
         composable("${Routes.STRATEGY_DETAIL}/{id}") { backStackEntry ->
-            val vm: MillionaireViewModel = hiltViewModel()  // ✅ USE HILT VERSION
+            val vm: MillionaireViewModel = hiltViewModel()
             val id = backStackEntry.arguments?.getString("id")?.toInt() ?: 0
 
             StrategyDetailScreen(
                 strategyId = id,
                 strategyTitle = "Strategy",
                 viewModel = vm,
-                onActivityClick = { _, _ -> },
+                onActivityClick = { activityId, strategyId ->
+                    // ✅ NOW CONNECTED: Navigate to activity detail
+                    navController.navigate("${Routes.ACTIVITY_DETAIL}/$activityId/$strategyId")
+                },
                 onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        // ── Activity Detail ───────────────────────────────────────────────────
+        // ✅ FIXED: Convert ActivityDetail to Strategy type for ActivityDetailScreen
+        composable("${Routes.ACTIVITY_DETAIL}/{activityId}/{strategyId}") { backStackEntry ->
+            val vm: MillionaireViewModel = hiltViewModel()
+            val activityId = backStackEntry.arguments?.getString("activityId")?.toInt() ?: 0
+            val strategyId = backStackEntry.arguments?.getString("strategyId")?.toInt() ?: 0
+
+            // ✅ CREATE Strategy object with nested Activity that ActivityDetailScreen expects
+            val strategy = Strategy(
+                id = strategyId,
+                title = "Activity $activityId",
+                description = "Activity Details",
+                age_min = 0,
+                age_max = 12,
+                icon = null,
+                completed_count = 0,
+                total_activities = 1,
+                // ✅ KEY: Add the 'activity' property with all nested data
+                activity = Activity(
+                    id = activityId.toInt(),
+                    strategy_id = strategyId,
+                    title = "Activity $activityId",
+                    description = "Activity Details",
+                    category = null,
+                    ageRange = "0-12",
+                    duration = 30,
+                    level = 1,
+                    materials = listOf("Materials needed"),
+                    tags = listOf("activity", "learning"),
+                    difficulty = "Medium",
+                    // ✅ Nested objects for ActivityDetailScreen
+                    meta = MetaInfo(
+                        materials = listOf("Materials needed"),
+                        timeMinutes = 30,
+                        difficulty = "Medium",
+                        tags = listOf("activity", "learning")
+                    ),
+                    basic = BasicInfo(
+                        plan = "Plan your approach...",
+                        do_ = "Execute the activity...",
+                        review = "Review the results..."
+                    ),
+                    parentGuidance = ParentGuidance(
+                        setup = "Setup instructions...",
+                        planQuestions = listOf("What will you do?", "How will you start?"),
+                        do_ = "Parent guidance during activity...",
+                        reviewPrompts = listOf("What happened?", "What did you learn?"),
+                        repeat = "How to repeat this activity..."
+                    ),
+                    help = HelpSection(
+                        successIndicators = listOf("Child shows interest", "Completes task"),
+                        commonMistakes = listOf("Rushing the activity", "Not following steps"),
+                        exampleDialogue = "Parent: Let's start!\nChild: Ok, what do I do?",
+                        tips = listOf("Be patient", "Encourage participation")
+                    )
+                )
+            )
+
+            ActivityDetailScreen(
+                activity = strategy,  // ✅ NOW CORRECT TYPE: Strategy instead of DailyActivityResponse
+                isCompleted = false,
+                viewModel = vm,
+                onBackClick = { navController.popBackStack() },
+                onCompleted = { navController.popBackStack() }
             )
         }
 

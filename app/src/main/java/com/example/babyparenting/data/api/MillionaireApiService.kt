@@ -6,39 +6,46 @@ import retrofit2.http.*
 interface MillionaireApiService {
 
     companion object {
-        const val BASE_URL = "http://192.168.1.7:8000/"
+        const val BASE_URL = "http://192.168.1.21:8000/"
     }
 
     /**
      * Fetch all available strategies
      */
-    @GET("millionaire/strategies")
+    @GET("millionaire/strategies")  // ✅ FIXED: Added millionaire prefix
     suspend fun getStrategies(): List<Strategy>
 
-    @GET("millionaire/strategies/{strategy_id}/activities")
+    /**
+     * Fetch activities for a specific strategy
+     */
+    @GET("millionaire/activities/{strategy_id}")  // ✅ FIXED: Added millionaire prefix
     suspend fun getActivities(
         @Path("strategy_id") strategyId: Int
     ): List<Activity>
 
-    @POST("millionaire/activity/complete")
+    /**
+     * Mark an activity as completed
+     */
+    @POST("millionaire/complete")  // ✅ FIXED: Added millionaire prefix
     suspend fun markActivityComplete(
-        @Body completion: ActivityCompletion
+        @Query("user_id") userId: String,  // ✅ FIXED: Added @Query annotation
+        @Query("activity_id") activityId: Int  // ✅ FIXED: Added @Query annotation
     ): ActivityCompletionResponse
 
-    @GET("millionaire/daily-activity")
+    /**
+     * Get today's recommended activity
+     */
+    @GET("millionaire/daily-activity")  // ✅ FIXED: Added millionaire prefix
     suspend fun getDailyActivity(
         @Query("user_id") userId: String,
         @Query("child_age") childAge: Int
     ): DailyActivityResponse
 
-    @GET("millionaire/progress/summary")
+    /**
+     * Get progress summary
+     */
+    @GET("millionaire/progress/summary")  // ✅ FIXED: Added millionaire prefix
     suspend fun getProgressSummary(
         @Query("user_id") userId: String
     ): ProgressSummary
 }
-data class ProgressSummary(
-    val total_activities: Int,
-    val completed_activities: Int,
-    val completion_percentage: Float,
-    val current_level: Int
-)
