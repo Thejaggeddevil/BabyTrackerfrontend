@@ -9,54 +9,10 @@ import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
-/**
- * LAZY dataset loader — only loads the ONE age group that the user is currently on.
- *
- * ── THE BUG FIX (floor/ceiling method) ───────────────────────────────────────
- * Old behaviour: If child was 7 years old, the app was loading ALL milestones
- * from 0 months to 84 months → thousands of CSV rows → app hang.
- *
- * New behaviour (floor/ceiling):
- *   - We map the child's age to EXACTLY ONE age group bucket.
- *   - FLOOR  = the group that contains the child's current age (startingGroupId).
- *   - CEILING = floor + 1 (next group, optional — loaded only when user scrolls).
- *   - We NEVER load groups BELOW the child's current age group on first load.
- *
- * Example:
- *   Child = 8 years 9 months = 105 months → startingGroupId = 11 (7–9 yrs)
- *   On app open, ONLY group 11 data loads. Groups 1–10 are ignored entirely.
- *   If parent scrolls up to group 10, THEN group 10 loads (lazy, on demand).
- *
- * ── FIXES IN THIS VERSION ────────────────────────────────────────────────────
- * FIX 1: ageRawToMonths() — old code used String.contains() which caused
- *         "108".contains("8") == true → wrong bucket. Now uses exact word match.
- * FIX 2: loadGroup_9_12() — Groups 12 and 13 previously both used minMo=108
- *         maxMo=144, loading identical data twice. Now Group 12 = 108–131 mo,
- *         Group 13 = 132–144 mo, each gets its own distinct slice.
- * FIX 3: clearCache() — exposed so MilestoneRepository can wipe stale group
- *         data when the child's age is changed by the parent.
- *
- * Age Group → CSV mapping:
- *   Group 1–6  (0–24 mo)   : 0_24_month_data.csv + 0_24_data_parent.csv
- *   Group 7–9  (24–60 mo)  : 24_60_month_data.csv + 25_60_data_parent.csv
- *                            + 2_5_academics_data.csv
- *   Group 10   (5–7 yr)    : 5_12_year_data.csv + 5_12_year_data_parent.csv
- *                            + language + maths + safety
- *   Group 11   (7–9 yr)    : science + social + civics
- *   Group 12   (9–11 yr)   : cs + foreign + remaining   [108–131 mo]
- *   Group 13   (11–12 yr)  : cs + foreign + lang        [132–144 mo]
- */
 class LazyDatasetLoader(private val context: Context) {
 
-    // In-memory cache — ek baar load hua group dobara CSV nahi padhega.
-    // clearCache() wipes this so a new child age starts completely fresh.
     private val loadedGroups = mutableMapOf<Int, List<Milestone>>()
 
-    /**
-     * Wipe the in-memory group cache.
-     * Must be called whenever the child's age changes so stale groups
-     * from the old age are not served to the new session.
-     */
     fun clearCache() = loadedGroups.clear()
 
     fun getAgeGroups(): List<AgeGroup> = listOf(
@@ -75,42 +31,26 @@ class LazyDatasetLoader(private val context: Context) {
         AgeGroup(13, "11 – 12 Years",  "Pre-teen independence, coding & digital ethics",  132, 144, 0xFF26C6DA)
     )
 
-    /**
-     * Load milestones for ONE specific age group (lazy, cached).
-     *
-     * Called on-demand: only when the user's screen shows a particular group.
-     * The JourneyViewModel should call this with startingGroupId(childAgeMonths)
-     * to load ONLY the current group first, not all previous ones.
-     */
     suspend fun loadForGroup(groupId: Int): List<Milestone> =
         withContext(Dispatchers.IO) {
             loadedGroups.getOrPut(groupId) {
-                when (groupId) {
+                val raw = when (groupId) {
                     in 1..6  -> loadGroup_0_24(groupId)
                     in 7..9  -> loadGroup_24_60(groupId)
                     10       -> loadGroup_5_7(groupId)
                     11       -> loadGroup_7_9(groupId)
                     else     -> loadGroup_9_12(groupId)
                 }
+                // ── FREEZE FIX ────────────────────────────────────────────────
+                // Groups 10–13 load 5–6 CSV files = hundreds of rows.
+                // Rendering too many cards at once freezes the UI.
+                // Cap each group to 40 milestones max — user sees them 4-by-4
+                // anyway, so 40 = 10 full batches which is more than enough.
+                // Earlier groups (1–9) are small so take() has no effect.
+                raw.take(MAX_MILESTONES_PER_GROUP)
             }
         }
 
-    /**
-     * ── FLOOR/CEILING METHOD ──────────────────────────────────────────────────
-     *
-     * Maps child's age in months to the FLOOR group (the group they currently
-     * belong to). This is the ONLY group loaded on app start.
-     *
-     * FLOOR: the group whose [startMonth, endMonth] contains childAgeMonths.
-     *
-     * Examples:
-     *   0   months → Group 1  (newborn)
-     *   7   months → Group 3  ← loads ONLY group 3, NOT groups 1–2
-     *   84  months → Group 11 ← loads ONLY group 11, NOT groups 1–10
-     *   105 months → Group 11 (8 yr 9 mo) ← same, NOT groups 1–10
-     *   108 months → Group 12
-     *   132 months → Group 13
-     */
     fun startingGroupId(childAgeMonths: Int): Int = when (childAgeMonths) {
         in 0..2    -> 1
         in 3..5    -> 2
@@ -127,22 +67,11 @@ class LazyDatasetLoader(private val context: Context) {
         else       -> 13
     }
 
-    /**
-     * CEILING group = startingGroupId + 1 (next group after current).
-     * Optional: load this after the floor group loads for smooth scrolling.
-     */
     fun ceilingGroupId(childAgeMonths: Int): Int =
         (startingGroupId(childAgeMonths) + 1).coerceAtMost(totalGroups())
 
     fun totalGroups(): Int = 13
 
-    /**
-     * Groups that should be pre-loaded on app start.
-     * Only floor group (and optionally ceiling) — NOT all groups from 1 to floor.
-     *
-     * Old (WRONG): (1..startingGroupId).toList()  ← caused hang
-     * New (CORRECT): listOf(floor, floor+1)       ← fast, only 2 groups max
-     */
     fun groupsToPreload(childAgeMonths: Int): List<Int> {
         val floor   = startingGroupId(childAgeMonths)
         val ceiling = ceilingGroupId(childAgeMonths)
@@ -154,7 +83,6 @@ class LazyDatasetLoader(private val context: Context) {
 
     // ── Group loaders ─────────────────────────────────────────────────────────
 
-    /** Groups 1–6: 0–24 months */
     private fun loadGroup_0_24(groupId: Int): List<Milestone> {
         val (start, end) = groupMonthRange(groupId)
 
@@ -209,7 +137,6 @@ class LazyDatasetLoader(private val context: Context) {
         return (child + parent).sortedBy { it.ageMonths }
     }
 
-    /** Groups 7–9: 24–60 months */
     private fun loadGroup_24_60(groupId: Int): List<Milestone> {
         val (startMo, endMo) = groupMonthRange(groupId)
 
@@ -295,14 +222,22 @@ class LazyDatasetLoader(private val context: Context) {
 
     /** Group 10: 5–7 years (60–83 months) */
     private fun loadGroup_5_7(groupId: Int): List<Milestone> {
+        // ── FREEZE FIX: load each CSV with a per-source cap ──────────────────
+        // Each source contributes at most SLICE rows so the combined list
+        // stays well under MAX_MILESTONES_PER_GROUP before the outer take().
         val child  = loadSubjectFilter("5_12_year_data.csv", groupId, DatasetSource.CHILD_5_12, "🏃",
             ageKey = "age_range", ageParser = ::parseAgeYearToMonths, minMo = 60, maxMo = 84)
+            .take(SLICE)
         val parent = loadParentFilter("5_12_year_data_parent.csv", groupId, DatasetSource.PARENT_5_12,
             ageKey = "age_year", minMo = 60, maxMo = 84)
+            .take(SLICE)
         val lang   = loadSubjectFilter("language_5_12_data.csv", groupId, DatasetSource.LANGUAGE, "🗣️",
             ageKey = "age", ageParser = { (it.toDoubleOrNull() ?: 5.0).times(12).toInt() }, minMo = 60, maxMo = 84)
+            .take(SLICE)
         val maths  = loadSubjectDataset("maths_5_12_data.csv", groupId, DatasetSource.MATHEMATICS, "🔢", "5")
+            .take(SLICE)
         val safety = loadSafetyDataset(groupId, "6")
+            .take(SLICE)
         return (child + parent + lang + maths + safety).sortedBy { it.ageMonths }
     }
 
@@ -310,40 +245,41 @@ class LazyDatasetLoader(private val context: Context) {
     private fun loadGroup_7_9(groupId: Int): List<Milestone> {
         val child   = loadSubjectFilter("5_12_year_data.csv", groupId, DatasetSource.CHILD_5_12, "🏃",
             ageKey = "age_range", ageParser = ::parseAgeYearToMonths, minMo = 84, maxMo = 108)
+            .take(SLICE)
         val parent  = loadParentFilter("5_12_year_data_parent.csv", groupId, DatasetSource.PARENT_5_12,
             ageKey = "age_year", minMo = 84, maxMo = 108)
+            .take(SLICE)
         val science = loadSubjectDataset("science_5_12_data.csv", groupId, DatasetSource.SCIENCE, "🔬", "8")
+            .take(SLICE)
         val social  = loadSubjectDataset("social_5_12_data.csv", groupId, DatasetSource.SOCIAL_STUDIES, "🏘️", "8")
+            .take(SLICE)
         val civics  = loadSubjectDataset("civics_evs_5_12_data.csv", groupId, DatasetSource.CIVICS, "🏛️", "8")
+            .take(SLICE)
         return (child + parent + science + social + civics).sortedBy { it.ageMonths }
     }
 
-    /**
-     * Groups 12–13: 9–12 years.
-     *
-     * FIX: Previously both groups used minMo=108 maxMo=144, loading the exact
-     * same CSV rows for both groups — doubling data and wasting memory.
-     * Now each group gets its own non-overlapping month slice:
-     *   Group 12 → 108–131 mo  (9 yr to just before 11 yr)
-     *   Group 13 → 132–144 mo  (11–12 yr)
-     */
+    /** Groups 12–13: 9–12 years */
     private fun loadGroup_9_12(groupId: Int): List<Milestone> {
-        // Each group gets its own distinct month range — no overlap, no duplicate rows.
         val (minMo, maxMo) = when (groupId) {
             12   -> 108 to 131
-            else -> 132 to 144   // Group 13 and any future group
+            else -> 132 to 144
         }
-
         val child   = loadSubjectFilter("5_12_year_data.csv", groupId, DatasetSource.CHILD_5_12, "🏃",
             ageKey = "age_range", ageParser = ::parseAgeYearToMonths, minMo = minMo, maxMo = maxMo)
+            .take(SLICE)
         val parent  = loadParentFilter("5_12_year_data_parent.csv", groupId, DatasetSource.PARENT_5_12,
             ageKey = "age_year", minMo = minMo, maxMo = maxMo)
+            .take(SLICE)
         val cs      = loadSubjectDataset("cs_5_12_data.csv", groupId, DatasetSource.COMPUTER_SCIENCE, "💻", "11")
+            .take(SLICE)
         val foreign = loadForeignDataset(groupId, "11")
+            .take(SLICE)
         val safety  = loadSafetyDataset(groupId, "9")
+            .take(SLICE)
         val lang    = loadSubjectFilter("language_5_12_data.csv", groupId, DatasetSource.LANGUAGE, "🗣️",
             ageKey = "age", ageParser = { (it.toDoubleOrNull() ?: 9.0).times(12).toInt() },
             minMo = minMo, maxMo = maxMo)
+            .take(SLICE)
         return (child + parent + cs + foreign + safety + lang).sortedBy { it.ageMonths }
     }
 
@@ -519,20 +455,9 @@ class LazyDatasetLoader(private val context: Context) {
         }
     }
 
-    /**
-     * Convert a raw age_group string from CSV to an approximate month value.
-     *
-     * FIX: Old code used String.contains() which caused false matches:
-     *   "108".contains("8") == true  → 8-year bucket hit for an 11-year row
-     *   "11".contains("1")  == true  → 1-year bucket hit for an 11-year row
-     *
-     * New code: extract the FIRST integer token from the string, then switch
-     * on its exact numeric value. "9-11" → firstInt=9 → 108 mo. Safe.
-     */
     private fun ageRawToMonths(raw: String): Int {
-        // Extract the first numeric token, e.g. "9-11 yr" → 9, "11" → 11
         val firstInt = raw.trim()
-            .split(Regex("[^0-9]"))   // split on any non-digit
+            .split(Regex("[^0-9]"))
             .firstOrNull { it.isNotEmpty() }
             ?.toIntOrNull() ?: return 60
 
@@ -545,7 +470,7 @@ class LazyDatasetLoader(private val context: Context) {
             10   -> 120
             11   -> 132
             12   -> 144
-            else -> firstInt * 12   // fallback: treat as year and convert
+            else -> firstInt * 12
         }
     }
 
@@ -593,5 +518,14 @@ class LazyDatasetLoader(private val context: Context) {
     private fun emojiSafety(env: String) = when (env.lowercase()) {
         "home"    -> "🏠"; "school"  -> "🏫"; "outdoor" -> "🌳"
         "online"  -> "💻"; "public"  -> "🏙️"; else      -> "🛡️"
+    }
+
+    companion object {
+        // Har ek CSV source se max kitne milestones lene hain
+        // 6 sources × 8 = 48 → outer take(40) se 40 final milestones
+        private const val SLICE = 8
+
+        // Ek group mein total max milestones (UI mein 4-4 batch = 10 batches)
+        private const val MAX_MILESTONES_PER_GROUP = 40
     }
 }

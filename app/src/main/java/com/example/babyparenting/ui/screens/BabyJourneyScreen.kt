@@ -276,8 +276,8 @@ private fun JourneyMap(
     val density       = LocalDensity.current
     val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
 
-    // ✅ LIMIT RENDER WINDOW (CRITICAL FIX)
-    val visibleItems = milestones.take(12) // only render 12 max
+
+    val visibleItems = milestones
 
     val totalH = SEGMENT_DP * (visibleItems.size + 2)
 

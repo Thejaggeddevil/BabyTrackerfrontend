@@ -90,7 +90,6 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
     fun loadDataIfNeeded() {
         if (hasLoaded) return
         hasLoaded = true
-
         viewModelScope.launch {
             milestoneRepo.initialLoad()
         }
@@ -122,10 +121,29 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Visible logic — same age group, 4-4 ──────────────────────────────────
 
+    /**
+     * Logic same hai — 4-4 batch mein milestones dikhao.
+     *
+     * FIX: Pehle findActiveGroupId() null return karta tha jab ek poora
+     * group complete ho jaata tha lekin next group abhi load nahi hua tha.
+     * Us case mein "return all" ho jaata tha — jo galat tha.
+     *
+     * Ab: agar activeGroupId null hai (matlab sab complete) toh
+     * sabse zyada ageGroupId wala group dikhao — next group load hone
+     * tak blank screen nahi aayegi.
+     */
     private fun computeVisible(all: List<Milestone>): List<Milestone> {
         if (all.isEmpty()) return emptyList()
 
-        val activeGroupId = findActiveGroupId(all) ?: return all
+        val activeGroupId = findActiveGroupId(all)
+
+        // Agar sab complete hain (activeGroupId == null) — last group dikhao
+        // taaki next group load hone tak screen blank na rahe
+        if (activeGroupId == null) {
+            val lastGroupId = all.maxOf { it.ageGroupId }
+            return all.filter { it.ageGroupId <= lastGroupId }
+        }
+
         val previousDone  = all.filter { it.ageGroupId < activeGroupId }
         val activeGroupMs = all.filter { it.ageGroupId == activeGroupId }
 
@@ -150,10 +168,28 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
                 all.filter { it.ageGroupId == groupId }.any { !it.isCompleted }
             }
 
+    /**
+     * FIX: Pehle agar activeGroupId null tha (sab complete), toh early return
+     * ho jaata tha aur next group kabhi load nahi hota tha.
+     *
+     * Ab: null case mein bhi maxGroup + 1 load karte hain.
+     */
     private fun checkAndLoadNextGroup(all: List<Milestone>) {
-        val activeGroupId = findActiveGroupId(all) ?: return
+        val activeGroupId = findActiveGroupId(all)
+
+        // Agar koi active group nahi (sab complete) — next group load karo
+        if (activeGroupId == null) {
+            val maxGroup = all.maxOfOrNull { it.ageGroupId } ?: return
+            viewModelScope.launch {
+                milestoneRepo.loadNextGroupIfNeeded(maxGroup + 1)
+            }
+            return
+        }
+
+        // Active group ke saare milestones complete hain — next load karo
         val activeGroupMs = all.filter { it.ageGroupId == activeGroupId }
         if (activeGroupMs.any { !it.isCompleted }) return
+
         viewModelScope.launch {
             milestoneRepo.loadNextGroupIfNeeded(activeGroupId + 1)
         }
@@ -184,11 +220,9 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
         refreshSubscriptionStatus()
 
         if (subscriptionManager.canAccessAdvice()) {
-            // Subscribed — seedha advice
             fetchAdvice(milestone)
             _showPaywall.value = false
         } else {
-            // Not subscribed — paywall dikhao
             _showPaywall.value = true
         }
     }
@@ -229,7 +263,6 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
         _paymentState.value       = PaymentState.Success(razorpayPaymentId)
         _subscriptionStatus.value = subscriptionManager.getStatus()
         _showPaywall.value        = false
-        // Ab advice fetch karo jo block tha
         _selectedMilestone.value?.let { fetchAdvice(it) }
     }
 
@@ -255,6 +288,7 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
     fun clearFilter() { _activeFilter.value = null }
 
     fun setChildAge(months: Int) {
+        hasLoaded = false   // FIX: age change pe fresh load allow karo
         milestoneRepo.setChildAge(months)
         viewModelScope.launch { milestoneRepo.initialLoad() }
     }
@@ -272,6 +306,7 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
     fun retryAdvice() { _selectedMilestone.value?.let { fetchAdvice(it) } }
 
     fun reloadDatasets() {
+        hasLoaded = false   // FIX: manual reload bhi fresh load kare
         viewModelScope.launch { milestoneRepo.initialLoad() }
     }
 
@@ -286,7 +321,6 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     companion object {
-        // Test key — production se pehle live key lagana
         private const val RAZORPAY_KEY_ID = "rzp_test_SHCQZMQFoBaboC"
     }
 }
