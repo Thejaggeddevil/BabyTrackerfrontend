@@ -1,5 +1,7 @@
 package com.example.babyparenting.ui.screens.millionaire
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -8,22 +10,18 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.babyparenting.data.model.ProgressSummary
-import com.example.babyparenting.data.model.DailyActivityResponse
 import com.example.babyparenting.data.model.Strategy
 import com.example.babyparenting.ui.viewmodel.MillionaireViewModel
 import com.example.babyparenting.ui.theme.LocalAppColors
@@ -35,6 +33,7 @@ import com.example.babyparenting.ui.viewmodel.StrategiesUiState
 fun MillionaireClubScreen(
     viewModel: MillionaireViewModel,
     onStrategyClick: (strategyId: Int) -> Unit,
+    childAge: Int,
     onActivityClick: (activityId: Int, strategyId: Int) -> Unit
 ) {
     val strategiesState by viewModel.strategiesState.collectAsState()
@@ -42,409 +41,320 @@ fun MillionaireClubScreen(
     val progressState by viewModel.progressState.collectAsState()
     val colors = LocalAppColors.current
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.bgMain)
-            .padding(bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        // Header Section
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 20.dp)
-            ) {
-                Text(
-                    text = "Millionaire Baby Club",
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = colors.textPrimary
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Build thinking skills through daily activities",
-                    fontSize = 14.sp,
-                    color = colors.textPrimary.copy(alpha = 0.7f),
-                    fontWeight = FontWeight.Normal
-                )
-            }
+        // ────────────────────────────────────────────────────────────────────
+        // HEADER (Clean - No Search/Filter)
+        // ────────────────────────────────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(colors.bgSurface)
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Text(
+                text = "Millionaire Baby Club",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textPrimary,
+                maxLines = 1
+            )
+            Text(
+                text = "Build thinking skills daily",
+                fontSize = 11.sp,
+                color = colors.textPrimary.copy(alpha = 0.7f),
+                fontWeight = FontWeight.Normal
+            )
         }
 
-        // Daily Activity Section (Changes at midnight)
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            ) {
-                Text(
-                    text = "Today's Challenge",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.textPrimary,
-                    modifier = Modifier.padding(bottom = 12.dp)
+        // ────────────────────────────────────────────────────────────────────
+        // MAIN CONTENT
+        // ────────────────────────────────────────────────────────────────────
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(vertical = 12.dp)
+        ) {
+            // 1️⃣ DAILY ACTIVITY SECTION
+            item {
+                DailyActivitySection(
+                    dailyActivityState = dailyActivityState,
+                    colors = colors,
+                    onActivityClick = onActivityClick
                 )
-
-                when (val state = dailyActivityState) {
-                    is DailyActivityUiState.Success -> {
-                        TodaysActivityCard(
-                            activity = state.activity,
-                            colors = colors,
-                            onActivityClick = {
-                                val activityId = state.activity.activity?.id?.toInt() ?: 0
-                                val strategyId = state.activity.activity?.strategy_id ?: 0
-                                if (activityId > 0) {
-                                    onActivityClick(activityId, strategyId)
-                                }
-                            }
-                        )
-                    }
-                    is DailyActivityUiState.Loading -> LoadingCard()
-                    is DailyActivityUiState.Error -> ErrorCard(message = state.message)
-                }
             }
-        }
 
-        // Progress Summary Section
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            ) {
-                Text(
-                    text = "Your Progress",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.textPrimary,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-
+            // 2️⃣ PROGRESS SECTION
+            item {
                 when (val state = progressState) {
                     is ProgressUiState.Success -> {
-                        ProgressSummaryCard(
+                        ProgressSummarySection(
                             progress = state.progress,
                             colors = colors
                         )
                     }
-                    is ProgressUiState.Loading -> LoadingCard()
-                    is ProgressUiState.Error -> {}
-                    else -> {}
+                    is ProgressUiState.Loading -> {
+                        LoadingCard()
+                    }
+                    is ProgressUiState.Error -> {
+                        // Silently skip on error
+                    }
                 }
             }
-        }
 
-        // Strategies Section with Horizontal Scrolling
-        item {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-            ) {
-                Text(
-                    text = "Learning Strategies",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.textPrimary,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                )
+            // 3️⃣ STRATEGIES SECTION HEADER
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Strategies",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary
+                    )
+                }
+            }
 
+            // 4️⃣ STRATEGIES LIST
+            item {
                 when (val state = strategiesState) {
                     is StrategiesUiState.Success -> {
-                        if (state.strategies.isNotEmpty()) {
-                            StrategiesHorizontalList(
-                                strategies = state.strategies,
-                                colors = colors,
-                                onStrategyClick = onStrategyClick
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(200.dp)
-                                    .padding(horizontal = 16.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "No strategies available",
-                                    color = colors.textPrimary.copy(alpha = 0.5f),
-                                    fontSize = 14.sp
-                                )
-                            }
-                        }
+                        StrategiesHorizontalList(
+                            strategies = state.strategies,
+                            colors = colors,
+                            onStrategyClick = onStrategyClick
+                        )
                     }
+
                     is StrategiesUiState.Loading -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(220.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(color = colors.coral)
-                        }
+                        LoadingCard()
                     }
+
                     is StrategiesUiState.Error -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(220.dp)
-                                .padding(horizontal = 16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            ErrorCard(message = state.message)
-                        }
+                        ErrorCard(state.message)
                     }
                 }
             }
-        }
 
-        item { Spacer(modifier = Modifier.height(16.dp)) }
+            // Spacer for bottom padding
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
     }
 }
 
-/**
- * Daily Activity Card - Shows today's challenge with compelling design
- * Updates at midnight automatically
- */
+// ════════════════════════════════════════════════════════════════════════════
+// 📅 DAILY ACTIVITY SECTION (Uses ActivityDetail from DailyActivityResponse)
+// ════════════════════════════════════════════════════════════════════════════
+
 @Composable
-private fun TodaysActivityCard(
-    activity: DailyActivityResponse,
+private fun DailyActivitySection(
+    dailyActivityState: DailyActivityUiState,
     colors: com.example.babyparenting.ui.theme.AppColorScheme,
-    onActivityClick: () -> Unit
+    onActivityClick: (activityId: Int, strategyId: Int) -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .clickable(onClick = onActivityClick),
-        colors = CardDefaults.cardColors(
-            containerColor = colors.coral.copy(alpha = 0.08f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-        border = androidx.compose.foundation.BorderStroke(
-            width = 1.5.dp,
-            color = colors.coral.copy(alpha = 0.3f)
-        )
+            .padding(horizontal = 16.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.bgSurface),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Top section with label and arrow
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
+            // Header
+            Text(
+                text = "📅 Today's Activity",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textPrimary
+            )
+
+            // Content
+            when (val state = dailyActivityState) {
+                is DailyActivityUiState.Success -> {
+                    val activityDetail = state.activity?.activity
+
+                    if (activityDetail != null) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = activityDetail.title ?: "",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.textPrimary
+                            )
+
+                            if (!activityDetail.plan.isNullOrBlank()) {
+                                Text(
+                                    text = activityDetail.plan ?: "",
+                                    fontSize = 12.sp,
+                                    color = colors.textPrimary.copy(alpha = 0.7f),
+                                    maxLines = 2
+                                )
+                            }
+
+                            Button(
+                                onClick = {
+                                    val id = activityDetail.id ?: return@Button
+                                    onActivityClick(id, activityDetail.strategy_id)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(40.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = colors.coral),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "Start Activity",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                    } else {
+                        Text(
+                            text = "No activity scheduled for today",
+                            fontSize = 12.sp,
+                            color = colors.textPrimary.copy(alpha = 0.6f),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 20.dp)
+                        )
+                    }
+                }
+
+                is DailyActivityUiState.Loading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(60.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = colors.coral,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+
+                is DailyActivityUiState.Error -> {
                     Text(
-                        text = "Today's Challenge",
+                        text = "Could not load today's activity",
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.coral
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = activity.activity?.title ?: "No activity today",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = colors.textPrimary,
-                        maxLines = 2
+                        color = colors.red,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 20.dp)
                     )
                 }
-                Icon(
-                    imageVector = Icons.Default.ArrowForward,
-                    contentDescription = "Open activity",
-                    tint = colors.coral,
-                    modifier = Modifier
-                        .size(28.dp)
-                        .align(Alignment.Top)
-                )
-            }
-
-            // Activity metadata
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(colors.coral.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "⏱ ${activity.activity?.duration ?: 10} min",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.textPrimary
-                )
-                Text(
-                    text = "•",
-                    fontSize = 13.sp,
-                    color = colors.textPrimary.copy(alpha = 0.3f)
-                )
-                Text(
-                    text = "Strategy ${activity.activity?.strategy_id ?: "N/A"}",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.textPrimary
-                )
-            }
-
-            // Call to action button
-            Button(
-                onClick = onActivityClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.coral
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Start activity",
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onPrimary
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Start Challenge",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onPrimary
-                )
             }
         }
     }
 }
 
-/**
- * Progress Summary Card - Shows overall progress and achievements
- */
+// ════════════════════════════════════════════════════════════════════════════
+// 📊 PROGRESS SUMMARY SECTION
+// ════════════════════════════════════════════════════════════════════════════
+
 @Composable
-private fun ProgressSummaryCard(
+private fun ProgressSummarySection(
     progress: ProgressSummary,
     colors: com.example.babyparenting.ui.theme.AppColorScheme
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
         colors = CardDefaults.cardColors(containerColor = colors.bgSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Main progress info
             Row(
-                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Activities Completed",
+                    text = "📊 Your Progress",
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     color = colors.textPrimary
                 )
-                Text(
-                    text = "${progress.completed_activities}/${progress.total_activities}",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = colors.coral
-                )
-            }
 
-            // Progress bar
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                LinearProgressIndicator(
-                    progress = (progress.completion_percentage / 100f).coerceIn(0f, 1f),
+                Surface(
+                    color = colors.coral.copy(alpha = 0.15f),
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(10.dp)
-                        .clip(RoundedCornerShape(5.dp)),
-                    color = colors.coral,
-                    trackColor = colors.coral.copy(alpha = 0.2f)
-                )
-                Text(
-                    text = "${progress.completion_percentage.toInt()}% Complete",
-                    fontSize = 12.sp,
-                    color = colors.textPrimary.copy(alpha = 0.6f),
-                    textAlign = TextAlign.End,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                        .clip(RoundedCornerShape(20.dp))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("⭐", fontSize = 11.sp)
+                        Text(
+                            text = "Level ${progress.current_level}",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.coral
+                        )
+                    }
+                }
             }
 
-            // Stats row
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            LinearProgressIndicator(
+                progress = (progress.completion_percentage / 100f).coerceIn(0f, 1f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                color = colors.coral,
+                trackColor = colors.coral.copy(alpha = 0.2f)
+            )
+
+            Text(
+                text = "${progress.completed_activities}/${progress.total_activities} completed (${progress.completion_percentage.toInt()}%)",
+                fontSize = 11.sp,
+                color = colors.textPrimary.copy(alpha = 0.6f),
+                textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
-            ) {
-                ProgressStatItem(
-                    label = "Completed",
-                    value = progress.completed_activities.toString(),
-                    colors = colors,
-                    modifier = Modifier.weight(1f)
-                )
-                ProgressStatItem(
-                    label = "Level",
-                    value = "${progress.current_level}",
-                    colors = colors,
-                    modifier = Modifier.weight(1f)
-                )
-                ProgressStatItem(
-                    label = "Streak",
-                    value = "🔥",
-                    colors = colors,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            )
         }
     }
 }
 
-/**
- * Individual progress statistic item
- */
-@Composable
-private fun ProgressStatItem(
-    label: String,
-    value: String,
-    colors: com.example.babyparenting.ui.theme.AppColorScheme,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier
-            .background(colors.coral.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
-            .padding(12.dp)
-    ) {
-        Text(
-            text = value,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.ExtraBold,
-            color = colors.coral
-        )
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            color = colors.textPrimary.copy(alpha = 0.6f),
-            fontWeight = FontWeight.SemiBold
-        )
-    }
-}
+// ════════════════════════════════════════════════════════════════════════════
+// STRATEGIES HORIZONTAL LIST
+// ════════════════════════════════════════════════════════════════════════════
 
-/**
- * Horizontally scrollable list of learning strategies
- * Each card has a button to view all activities for that strategy
- */
 @Composable
 private fun StrategiesHorizontalList(
     strategies: List<Strategy>,
@@ -452,14 +362,11 @@ private fun StrategiesHorizontalList(
     onStrategyClick: (Int) -> Unit
 ) {
     LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(horizontal = 16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        items(
-            count = strategies.size,
-            key = { index -> strategies.getOrNull(index)?.id ?: index }
-        ) { index ->
+        items(strategies.size) { index ->
             strategies.getOrNull(index)?.let { strategy ->
                 StrategyCard(
                     strategy = strategy,
@@ -471,65 +378,90 @@ private fun StrategiesHorizontalList(
     }
 }
 
-/**
- * Individual Strategy Card
- * Shows strategy details and a button to view all activities
- */
+// ════════════════════════════════════════════════════════════════════════════
+// STRATEGY CARD (with completion badge)
+// ════════════════════════════════════════════════════════════════════════════
+
 @Composable
 private fun StrategyCard(
     strategy: Strategy,
     colors: com.example.babyparenting.ui.theme.AppColorScheme,
     onClick: () -> Unit
 ) {
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(if (isPressed) 0.98f else 1f)
+
     Card(
         modifier = Modifier
-            .width(180.dp)
-            .clip(RoundedCornerShape(16.dp)),
+            .width(160.dp)
+            .scale(scale)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = colors.bgSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(14.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Strategy info
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = strategy.title,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = colors.textPrimary,
-                    maxLines = 2
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = strategy.title,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.textPrimary,
+                            maxLines = 2
+                        )
+                    }
+
+                    // ✅ Show completion badge
+                    if (strategy.completed_count > 0 && strategy.completed_count == strategy.total_activities) {
+                        Surface(
+                            color = colors.coral.copy(alpha = 0.15f),
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                        ) {
+                            Text(
+                                text = "✓",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.coral,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(2.dp)
+                            )
+                        }
+                    }
+                }
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    Text("👶", fontSize = 10.sp)
                     Text(
-                        text = "👶",
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        text = "${strategy.age_min}–${strategy.age_max} yrs",
-                        fontSize = 11.sp,
-                        color = colors.textPrimary.copy(alpha = 0.7f),
-                        fontWeight = FontWeight.Medium
+                        text = "${strategy.age_min}–${strategy.age_max}",
+                        fontSize = 10.sp,
+                        color = colors.textPrimary.copy(alpha = 0.7f)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Progress section
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "${strategy.completed_count}/${strategy.total_activities}",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color = colors.coral
                 )
                 LinearProgressIndicator(
@@ -538,55 +470,44 @@ private fun StrategyCard(
                     else 0f,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
+                        .height(5.dp)
+                        .clip(RoundedCornerShape(2.dp)),
                     color = colors.coral,
                     trackColor = colors.coral.copy(alpha = 0.2f)
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Action button - Click to view all activities
             Button(
                 onClick = onClick,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(40.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.coral.copy(alpha = 0.9f)
-                ),
-                shape = RoundedCornerShape(10.dp),
+                    .height(34.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = colors.coral),
+                shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(0.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowForward,
-                    contentDescription = "View activities",
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onPrimary
-                )
-                Spacer(modifier = Modifier.width(4.dp))
                 Text(
                     text = "View All",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onPrimary
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
     }
 }
 
-/**
- * Loading state card
- */
+// ════════════════════════════════════════════════════════════════════════════
+// LOADING & ERROR CARDS
+// ════════════════════════════════════════════════════════════════════════════
+
 @Composable
 private fun LoadingCard() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(160.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .height(120.dp)
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(LocalAppColors.current.bgSurface),
         contentAlignment = Alignment.Center
     ) {
@@ -594,35 +515,33 @@ private fun LoadingCard() {
     }
 }
 
-/**
- * Error state card
- */
 @Composable
 private fun ErrorCard(message: String) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
         colors = CardDefaults.cardColors(
             containerColor = LocalAppColors.current.red.copy(alpha = 0.1f)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(10.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(12.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Info,
                 contentDescription = "Error",
                 tint = LocalAppColors.current.red,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(18.dp)
             )
             Text(
                 text = message,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 color = LocalAppColors.current.red,
                 modifier = Modifier.weight(1f)
             )

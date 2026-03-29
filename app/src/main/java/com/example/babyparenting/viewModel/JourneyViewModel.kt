@@ -294,7 +294,11 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setChildName(name: String) = milestoneRepo.setChildName(name)
+
+    // ✅ FIXED: Return age in MONTHS (not just call to milestoneRepo)
+    fun getChildAge(): Int = milestoneRepo.getChildAgeMonths()
     fun getChildAgeMonths(): Int   = milestoneRepo.getChildAgeMonths()
+
     fun getChildName(): String     = milestoneRepo.getChildName()
     fun refreshAfterAdminEdit()    = milestoneRepo.refreshAdminMilestones()
 

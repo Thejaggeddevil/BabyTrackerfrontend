@@ -6,46 +6,41 @@ import retrofit2.http.*
 interface MillionaireApiService {
 
     companion object {
-        const val BASE_URL = "http://192.168.1.21:8000/"
+        // ⚠️ CHANGE THIS TO YOUR ACTUAL BACKEND URL
+        const val BASE_URL = "http://192.168.1.21:8000"  // Your FastAPI backend
+        // For emulator: http://10.0.2.2:8000
+        // For real device: http://your-server-ip:8000
     }
 
-    /**
-     * Fetch all available strategies
-     */
-    @GET("millionaire/strategies")  // ✅ FIXED: Added millionaire prefix
+    // ===== GET STRATEGIES =====
+    @GET("/millionaire/strategies")
     suspend fun getStrategies(): List<Strategy>
 
-    /**
-     * Fetch activities for a specific strategy
-     */
-    @GET("millionaire/activities/{strategy_id}")  // ✅ FIXED: Added millionaire prefix
-    suspend fun getActivities(
-        @Path("strategy_id") strategyId: Int
-    ): List<Activity>
+    // ===== GET ACTIVITIES BY STRATEGY =====
+    @GET("/millionaire/activities/{strategy_id}")
+    suspend fun getActivitiesByStrategy(@Path("strategy_id") strategyId: Int): List<Activity>
 
-    /**
-     * Mark an activity as completed
-     */
-    @POST("millionaire/complete")  // ✅ FIXED: Added millionaire prefix
-    suspend fun markActivityComplete(
-        @Query("user_id") userId: String,  // ✅ FIXED: Added @Query annotation
-        @Query("activity_id") activityId: Int  // ✅ FIXED: Added @Query annotation
-    ): ActivityCompletionResponse
+    // ===== GET ACTIVITY WITH PARENT GUIDANCE =====
+    @GET("/millionaire/activity/{activity_id}/with-guidance")
+    suspend fun getActivityWithGuidance(@Path("activity_id") activityId: Int): Map<String, Any>
 
-    /**
-     * Get today's recommended activity
-     */
-    @GET("millionaire/daily-activity")  // ✅ FIXED: Added millionaire prefix
+    // ===== GET DAILY ACTIVITY =====
+    @GET("/millionaire/daily-activity")
     suspend fun getDailyActivity(
         @Query("user_id") userId: String,
         @Query("child_age") childAge: Int
     ): DailyActivityResponse
 
-    /**
-     * Get progress summary
-     */
-    @GET("millionaire/progress/summary")  // ✅ FIXED: Added millionaire prefix
+    // ===== GET PROGRESS SUMMARY =====
+    @GET("/millionaire/progress/summary")
     suspend fun getProgressSummary(
         @Query("user_id") userId: String
     ): ProgressSummary
+
+    // ===== COMPLETE ACTIVITY =====
+    @POST("/millionaire/complete")
+    suspend fun completeActivity(
+        @Query("user_id") userId: String,
+        @Query("activity_id") activityId: Int
+    ): ActivityCompletionResponse
 }
