@@ -19,7 +19,7 @@ interface BabyApi {
 
 object RetrofitProvider {
 
-    private const val BASE_URL = "http://192.168.1.20:8000/"
+    private const val BASE_URL = "http://192.168.1.21:8000/"
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY

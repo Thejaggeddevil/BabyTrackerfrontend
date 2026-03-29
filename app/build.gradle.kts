@@ -60,6 +60,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
 
     implementation("com.google.dagger:hilt-android:2.51")
+    implementation(libs.androidx.compose.animation.core)
     ksp("com.google.dagger:hilt-compiler:2.51")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 

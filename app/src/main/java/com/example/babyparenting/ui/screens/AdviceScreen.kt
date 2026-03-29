@@ -47,6 +47,9 @@ import com.example.babyparenting.data.model.UiState
 import com.example.babyparenting.network.model.AdviceResponse
 import com.example.babyparenting.ui.theme.LocalAppColors
 import com.example.babyparenting.viewmodel.JourneyViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @Composable
 fun AdviceScreen(viewModel: JourneyViewModel, onBack: () -> Unit) {
@@ -79,8 +82,16 @@ fun AdviceScreen(viewModel: JourneyViewModel, onBack: () -> Unit) {
         when (val state = adviceState) {
             is UiState.Loading -> LoadingView()
             is UiState.Success -> AdviceContent(state.data, selectedMilestone) {
-                selectedMilestone?.let { viewModel.markComplete(it.id) }
-                viewModel.resetAdvice(); onBack()
+                // ✅ FIX: Mark complete THEN navigate back
+                selectedMilestone?.let {
+                    viewModel.markComplete(it.id)
+                    // Give a moment for state update
+                    CoroutineScope(Dispatchers.Main).launch {
+                        kotlinx.coroutines.delay(500)
+                        viewModel.resetAdvice()
+                        onBack()
+                    }
+                }
             }
             is UiState.Error -> ErrorView(state.message, state.retryable) { viewModel.retryAdvice() }
             is UiState.Idle  -> IdleView()

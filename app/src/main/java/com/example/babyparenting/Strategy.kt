@@ -46,6 +46,11 @@ data class Activity(
 
     @SerializedName("title")
     val title: String? = null,
+    @SerializedName("age_min")
+    val age_min: Int?,
+    @SerializedName("age_max")
+    val age_max: Int?,
+
 
     @SerializedName("description")
     val description: String? = null,
@@ -124,6 +129,8 @@ data class ParentGuidance(
 
     @SerializedName("plan_questions")
     val planQuestions: List<String>? = null,
+    @SerializedName("examples")
+    val examples: List<String>? = null,
 
     @SerializedName("do")
     val do_: String? = null,
@@ -139,17 +146,17 @@ data class ParentGuidance(
 
 @Serializable
 data class HelpSection(
-    @SerializedName("success_indicators")
-    val successIndicators: List<String>? = null,
+    @SerializedName("indicators")
+    val indicators: List<String>? = null,
 
-    @SerializedName("common_mistakes")
-    val commonMistakes: List<String>? = null,
+    @SerializedName("mistakes")
+    val mistakes: List<String>? = null,
 
-    @SerializedName("example_dialogue")
-    val exampleDialogue: String? = null,
+    @SerializedName("examples")
+    val examples: List<String>? = null,
 
-    @SerializedName("tips")
-    val tips: List<String>? = null
+    @SerializedName("dialogue")
+    val dialogue: String? = null
 )
 
 // ===== ACTIVITY COMPLETION REQUEST =====
@@ -205,6 +212,12 @@ data class ActivityDetail(
 data class DailyActivityResponse(
     @SerializedName("activity")
     val activity: ActivityDetail? = null,
+    @SerializedName("description")
+    val description: String? = null ,
+
+
+    @SerializedName("title")
+    val title: String? =null,
 
     @SerializedName("message")
     val message: String? = null

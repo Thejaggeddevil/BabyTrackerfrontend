@@ -1,145 +1,24 @@
 package com.example.babyparenting.ui.viewmodel
 
+import android.content.Context
+import com.example.babyparenting.data.local.UserManager
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.babyparenting.data.model.ProgressSummary
 import com.example.babyparenting.data.model.*
 import com.example.babyparenting.data.repository.MillionaireRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import javax.inject.Inject
-
-@HiltViewModel
-class MillionaireViewModel @Inject constructor(
-    private val repository: MillionaireRepository
-) : ViewModel() {
-
-    private val _strategiesState = MutableStateFlow<StrategiesUiState>(StrategiesUiState.Loading)
-    val strategiesState: StateFlow<StrategiesUiState> = _strategiesState.asStateFlow()
-
-    private val _activitiesState = MutableStateFlow<ActivitiesUiState>(ActivitiesUiState.Idle)
-    val activitiesState: StateFlow<ActivitiesUiState> = _activitiesState.asStateFlow()
-
-    private val _dailyActivityState = MutableStateFlow<DailyActivityUiState>(DailyActivityUiState.Loading)
-    val dailyActivityState: StateFlow<DailyActivityUiState> = _dailyActivityState.asStateFlow()
-
-    private val _progressState = MutableStateFlow<ProgressUiState>(ProgressUiState.Idle)
-    val progressState: StateFlow<ProgressUiState> = _progressState.asStateFlow()
-
-    private val _completionState = MutableStateFlow<CompletionUiState>(CompletionUiState.Idle)
-    val completionState: StateFlow<CompletionUiState> = _completionState.asStateFlow()
-
-    val completedActivities: Flow<Set<Int>> = repository.getCompletedActivities()
-    val childAge: Flow<Int> = repository.getChildAge()
-    val userId: Flow<String> = repository.getUserId()
-
-    init {
-        loadStrategies()
-        loadDailyActivity()
-        loadProgress()
-    }
-
-    fun loadStrategies() {
-        viewModelScope.launch {
-            _strategiesState.value = StrategiesUiState.Loading
-            val result = repository.getStrategies()
-            result.fold(
-                onSuccess = { strategies ->
-                    _strategiesState.value = StrategiesUiState.Success(strategies)
-                },
-                onFailure = { error ->
-                    _strategiesState.value = StrategiesUiState.Error(error.message ?: "Unknown error")
-                }
-            )
-        }
-    }
-
-    fun loadActivitiesForStrategy(strategyId: Int) {
-        viewModelScope.launch {
-            _activitiesState.value = ActivitiesUiState.Loading
-            val result = repository.getActivities(strategyId)
-            result.fold(
-                onSuccess = { activities ->
-                    _activitiesState.value = ActivitiesUiState.Success(activities)
-                },
-                onFailure = { error ->
-                    _activitiesState.value = ActivitiesUiState.Error(error.message ?: "Unknown error")
-                }
-            )
-        }
-    }
-
-    fun markActivityAsCompleted(activityId: Int) {
-        viewModelScope.launch {
-            _completionState.value = CompletionUiState.Loading
-            val userId = repository.getUserId().firstOrNull() ?: "default_user"
-            val result = repository.completeActivity(userId, activityId)
-            result.fold(
-                onSuccess = {
-                    _completionState.value = CompletionUiState.Success("Activity marked as completed!")
-                    loadProgress()
-                },
-                onFailure = { error ->
-                    _completionState.value = CompletionUiState.Error(error.message ?: "Failed to complete activity")
-                }
-            )
-        }
-    }
-
-    fun setChildAge(age: Int) {
-        viewModelScope.launch {
-            repository.setChildAge(age)
-            loadStrategies()
-            loadDailyActivity()
-        }
-    }
-
-    fun setUserId(userId: String) {
-        viewModelScope.launch {
-            repository.setUserId(userId)
-        }
-    }
-
-    fun loadDailyActivity() {
-        viewModelScope.launch {
-            _dailyActivityState.value = DailyActivityUiState.Loading
-            val userId = repository.getUserId().firstOrNull() ?: "default_user"
-            val age = repository.getChildAge().firstOrNull() ?: 3
-            val result = repository.getDailyActivity(userId, age)
-            result.fold(
-                onSuccess = { activity ->
-                    _dailyActivityState.value = DailyActivityUiState.Success(activity)
-                },
-                onFailure = { error ->
-                    _dailyActivityState.value = DailyActivityUiState.Error(error.message ?: "Unknown error")
-                }
-            )
-        }
-    }
-
-    fun loadProgress() {
-        viewModelScope.launch {
-            _progressState.value = ProgressUiState.Loading
-            val userId = repository.getUserId().firstOrNull() ?: "default_user"
-            val result = repository.getProgressSummary(userId)
-            result.fold(
-                onSuccess = { summary ->
-                    _progressState.value = ProgressUiState.Success(summary)
-                },
-                onFailure = { error ->
-                    _progressState.value = ProgressUiState.Error(error.message ?: "Unknown error")
-                }
-            )
-        }
-    }
-
-    fun clearCompletion() {
-        _completionState.value = CompletionUiState.Idle
-    }
-}
-
-// ============ UI State Sealed Classes ============
+import kotlin.coroutines.cancellation.CancellationException
 
 sealed class StrategiesUiState {
     object Loading : StrategiesUiState()
@@ -148,10 +27,15 @@ sealed class StrategiesUiState {
 }
 
 sealed class ActivitiesUiState {
-    object Idle : ActivitiesUiState()
     object Loading : ActivitiesUiState()
     data class Success(val activities: List<Activity>) : ActivitiesUiState()
     data class Error(val message: String) : ActivitiesUiState()
+}
+
+sealed class ActivityDetailUiState {
+    object Loading : ActivityDetailUiState()
+    data class Success(val activity: Activity) : ActivityDetailUiState()
+    data class Error(val message: String) : ActivityDetailUiState()
 }
 
 sealed class DailyActivityUiState {
@@ -161,7 +45,6 @@ sealed class DailyActivityUiState {
 }
 
 sealed class ProgressUiState {
-    object Idle : ProgressUiState()
     object Loading : ProgressUiState()
     data class Success(val progress: ProgressSummary) : ProgressUiState()
     data class Error(val message: String) : ProgressUiState()
@@ -172,4 +55,248 @@ sealed class CompletionUiState {
     object Loading : CompletionUiState()
     data class Success(val message: String) : CompletionUiState()
     data class Error(val message: String) : CompletionUiState()
+}
+
+@HiltViewModel
+class MillionaireViewModel @Inject constructor(
+    private val repository: MillionaireRepository,
+    @ApplicationContext private val context: Context
+) : ViewModel(){
+
+    private val _strategiesState = MutableStateFlow<StrategiesUiState>(StrategiesUiState.Loading)
+    val strategiesState: StateFlow<StrategiesUiState> = _strategiesState.asStateFlow()
+
+    private val _activitiesState = MutableStateFlow<ActivitiesUiState>(ActivitiesUiState.Loading)
+    val activitiesState: StateFlow<ActivitiesUiState> = _activitiesState.asStateFlow()
+
+    private val _activityDetailState = MutableStateFlow<ActivityDetailUiState>(ActivityDetailUiState.Loading)
+    val activityDetailState: StateFlow<ActivityDetailUiState> = _activityDetailState.asStateFlow()
+
+    private val _dailyActivityState = MutableStateFlow<DailyActivityUiState>(DailyActivityUiState.Loading)
+    val dailyActivityState: StateFlow<DailyActivityUiState> = _dailyActivityState.asStateFlow()
+
+    private val _progressState = MutableStateFlow<ProgressUiState>(ProgressUiState.Loading)
+    val progressState: StateFlow<ProgressUiState> = _progressState.asStateFlow()
+
+    private val _completionState = MutableStateFlow<CompletionUiState>(CompletionUiState.Idle)
+    val completionState: StateFlow<CompletionUiState> = _completionState.asStateFlow()
+
+    // ✅ CRITICAL: Track completed activities in StateFlow like milestone.isCompleted
+    private val _completedActivities = MutableStateFlow<Set<Int>>(emptySet())
+    val completedActivities: StateFlow<Set<Int>> = _completedActivities.asStateFlow()
+
+    private val _childAge = MutableStateFlow(0)
+    val childAge: StateFlow<Int> = _childAge.asStateFlow()
+
+    private val _currentStrategyId = MutableStateFlow(0)
+    val currentStrategyId: StateFlow<Int> = _currentStrategyId.asStateFlow()
+
+    init {
+        val userId = UserManager.getUserId(context) // we’ll define this
+        loadStrategies()
+        loadProgress(userId)
+        loadDailyActivity(userId, _childAge.value)
+    }
+
+    fun setChildAge(ageMonths: Int) {
+        _childAge.value = ageMonths
+        val ageYears = ageMonths / 12
+        Log.d("MillionaireVM", "🔄 Child age set to $ageMonths months ($ageYears years)")
+        loadStrategies()
+        val userId = UserManager.getUserId(context)
+        loadDailyActivity(userId, ageMonths)
+    }
+
+    fun loadStrategies() {
+        viewModelScope.launch {
+            try {
+                _strategiesState.value = StrategiesUiState.Loading
+                Log.d("MillionaireVM", "✅ Loading strategies from backend...")
+
+                val allStrategies = repository.getStrategies()
+                val childAgeYears = _childAge.value / 12
+
+                val filteredStrategies = allStrategies.filter { strategy ->
+                    if (_childAge.value == 0) {
+                        true
+                    } else {
+                        val min = strategy.age_min ?: 0
+                        val max = strategy.age_max ?: 999
+                        childAgeYears >= min && childAgeYears <= max
+                    }
+                }
+
+                Log.d("MillionaireVM", "✅ Loaded ${filteredStrategies.size}/${allStrategies.size} strategies")
+
+                if (filteredStrategies.isEmpty()) {
+                    _strategiesState.value = StrategiesUiState.Error("No strategies found for this age")
+                } else {
+                    _strategiesState.value = StrategiesUiState.Success(filteredStrategies)
+                }
+            } catch (e: Exception) {
+                Log.e("MillionaireVM", "❌ Error loading strategies: ${e.message}")
+                _strategiesState.value = StrategiesUiState.Error(e.message ?: "Failed to load strategies")
+            }
+        }
+    }
+
+    fun loadActivitiesForStrategy(strategyId: Int) {
+        viewModelScope.launch {
+            try {
+                _activitiesState.value = ActivitiesUiState.Loading
+                _currentStrategyId.value = strategyId
+                Log.d("MillionaireVM", "📋 Loading activities for strategy $strategyId...")
+
+                val allActivities = repository.getActivitiesForStrategy(strategyId)
+                val childAgeYears = _childAge.value / 12
+
+                val filteredActivities = allActivities.filter { activity ->
+                    if (_childAge.value == 0) {
+                        true
+                    } else {
+                        val min = activity.age_min ?: 0
+                        val max = activity.age_max ?: 999
+                        childAgeYears in min..max
+                    }
+                }
+
+                Log.d("MillionaireVM", "✅ Loaded ${filteredActivities.size}/${allActivities.size} activities")
+
+                if (filteredActivities.isEmpty()) {
+                    _activitiesState.value = ActivitiesUiState.Error("No activities found for this age group")
+                } else {
+                    _activitiesState.value = ActivitiesUiState.Success(filteredActivities)
+                }
+            } catch (e: Exception) {
+                Log.e("MillionaireVM", "❌ Error loading activities: ${e.message}")
+                _activitiesState.value = ActivitiesUiState.Error(e.message ?: "Failed to load activities")
+            }
+        }
+    }
+
+    fun loadActivityDetail(activityId: Int) {
+        viewModelScope.launch {
+            try {
+                _activityDetailState.value = ActivityDetailUiState.Loading
+                Log.d("MillionaireVM", "📖 Loading activity detail $activityId...")
+
+                val activity = repository.getActivityDetail(activityId)
+
+                Log.d("MillionaireVM", "✅ Loaded activity: ${activity.title}")
+                _activityDetailState.value = ActivityDetailUiState.Success(activity)
+            } catch (e: Exception) {
+                Log.e("MillionaireVM", "❌ Error loading activity detail: ${e.message}")
+                _activityDetailState.value = ActivityDetailUiState.Error(e.message ?: "Failed to load activity detail")
+            }
+        }
+    }
+
+    fun loadDailyActivity(userId: String, childAge: Int) {
+        viewModelScope.launch {
+            try {
+                _dailyActivityState.value = DailyActivityUiState.Loading
+                Log.d("MillionaireVM", "⭐ Loading daily activity for user $userId...")
+
+                val dailyActivity = repository.getDailyActivity(userId, childAge)
+
+                Log.d("MillionaireVM", "✅ Loaded daily activity: ${dailyActivity.activity?.title ?: "None"}")
+                _dailyActivityState.value = DailyActivityUiState.Success(dailyActivity)
+            } catch (e: Exception) {
+                Log.e("MillionaireVM", "❌ Error loading daily activity: ${e.message}")
+                _dailyActivityState.value = DailyActivityUiState.Error(e.message ?: "Failed to load daily activity")
+            }
+        }
+    }
+
+    fun loadProgress(userId: String) {
+        viewModelScope.launch {
+            try {
+                _progressState.value = ProgressUiState.Loading
+                Log.d("MillionaireVM", "📊 Loading progress for $userId...")
+
+                val progress = repository.getProgress(userId)
+
+                Log.d("MillionaireVM", "✅ Progress: ${progress.completed_activities}/${progress.total_activities}")
+                _progressState.value = ProgressUiState.Success(progress)
+            } catch (e: Exception) {
+                Log.e("MillionaireVM", "❌ Error loading progress: ${e.message}")
+                _progressState.value = ProgressUiState.Error(e.message ?: "Failed to load progress")
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ✅ THE REAL PERMANENT FIX - Same logic as JourneyViewModel milestone logic
+    // ═══════════════════════════════════════════════════════════════════════════
+    fun markActivityCompleted(
+        userId: String,
+        activityId: Int,
+        strategyId: Int
+    ) {
+        viewModelScope.launch {
+            try {
+                _completionState.value = CompletionUiState.Loading
+                Log.d("MillionaireVM", "🚀 Completing activity $activityId...")
+
+                // ✅ Backend call (safe from cancellation)
+                withContext(Dispatchers.IO + NonCancellable) {
+                    repository.completeActivity(userId, activityId)
+                }
+
+                Log.d("MillionaireVM", "✅ Backend success")
+
+                // ✅ Update local state FIRST (this drives UI unlock)
+                _completedActivities.value =
+                    _completedActivities.value + activityId
+
+                Log.d("MillionaireVM", "🔥 Local state updated")
+
+                // ✅ Emit success → UI will react
+                _completionState.value =
+                    CompletionUiState.Success("Completed")
+
+                // ✅ Reload activities (recalculate lock)
+                if (strategyId > 0) {
+                    loadActivitiesForStrategy(strategyId)
+                }
+
+                // ✅ Refresh progress
+                loadProgress(userId)
+
+                // ❌ REMOVE navigation trigger (THIS WAS YOUR BUG)
+                // onSuccess()  ← DELETE THIS
+
+                // Optional: reset state later
+                delay(1000)
+                _completionState.value = CompletionUiState.Idle
+
+            } catch (e: CancellationException) {
+                Log.e("MillionaireVM", "❌ CANCELLED → lifecycle issue")
+            } catch (e: Exception) {
+                Log.e("MillionaireVM", "❌ Error: ${e.message}")
+                _completionState.value =
+                    CompletionUiState.Error(e.message ?: "Unknown error")
+            }
+        }
+    }
+
+    fun setSearchQuery(query: String) {
+        Log.d("MillionaireVM", "Search: '$query'")
+    }
+
+    fun setAgeFilter(range: IntRange?) {
+        Log.d("MillionaireVM", "Age filter: $range")
+    }
+
+    fun isActivityLocked(activities: List<Activity>, currentActivity: Activity): Boolean {
+        val currentIndex = activities.indexOfFirst { it.id == currentActivity.id }
+        if (currentIndex <= 0) return false
+
+        val previousActivity = activities.getOrNull(currentIndex - 1) ?: return false
+        return previousActivity.id?.let { !isActivityCompleted(it) } ?: false
+    }
+
+    fun isActivityCompleted(activityId: Int): Boolean {
+        return _completedActivities.value.contains(activityId)
+    }
 }
