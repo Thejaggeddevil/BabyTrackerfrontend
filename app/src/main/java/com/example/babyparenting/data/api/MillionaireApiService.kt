@@ -6,7 +6,7 @@ import retrofit2.http.*
 interface MillionaireApiService {
 
     companion object {
-        const val BASE_URL = "http://192.168.1.21:8000/"
+        const val BASE_URL = "http://192.168.1.20:8000/"
     }
 
     /**
