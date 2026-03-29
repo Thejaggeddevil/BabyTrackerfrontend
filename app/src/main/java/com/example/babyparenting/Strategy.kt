@@ -239,9 +239,14 @@ data class ProgressSummary(
     val current_level: Int = 1
 )
 
+data class CompletedIdsResponse(
+    @SerializedName("completed_ids") val completedIds: List<Int>
+)
+
 // ===== ACTIVITY WITH STATUS (LOCAL) =====
 
 data class ActivityWithStatus(
     val activity: Activity,
     val isCompleted: Boolean
+
 )

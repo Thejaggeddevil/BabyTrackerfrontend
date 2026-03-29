@@ -61,7 +61,7 @@ sealed class CompletionUiState {
 class MillionaireViewModel @Inject constructor(
     private val repository: MillionaireRepository,
     @ApplicationContext private val context: Context
-) : ViewModel(){
+) : ViewModel() {
 
     private val _strategiesState = MutableStateFlow<StrategiesUiState>(StrategiesUiState.Loading)
     val strategiesState: StateFlow<StrategiesUiState> = _strategiesState.asStateFlow()
@@ -81,7 +81,7 @@ class MillionaireViewModel @Inject constructor(
     private val _completionState = MutableStateFlow<CompletionUiState>(CompletionUiState.Idle)
     val completionState: StateFlow<CompletionUiState> = _completionState.asStateFlow()
 
-    // ✅ CRITICAL: Track completed activities in StateFlow like milestone.isCompleted
+    // ✅ Track completed activities
     private val _completedActivities = MutableStateFlow<Set<Int>>(emptySet())
     val completedActivities: StateFlow<Set<Int>> = _completedActivities.asStateFlow()
 
@@ -91,11 +91,34 @@ class MillionaireViewModel @Inject constructor(
     private val _currentStrategyId = MutableStateFlow(0)
     val currentStrategyId: StateFlow<Int> = _currentStrategyId.asStateFlow()
 
+    // ✅ Navigation event — true = back jaao
+    private val _navigationEvent = MutableStateFlow(false)
+    val navigationEvent: StateFlow<Boolean> = _navigationEvent.asStateFlow()
+
     init {
-        val userId = UserManager.getUserId(context) // we’ll define this
+        val userId = UserManager.getUserId(context)
         loadStrategies()
         loadProgress(userId)
         loadDailyActivity(userId, _childAge.value)
+        loadCompletedActivities(userId)  // ✅ Startup pe completed IDs load karo
+    }
+
+    // ✅ Backend se completed activity IDs load karo
+    fun loadCompletedActivities(userId: String) {
+        viewModelScope.launch {
+            try {
+                val response = repository.getCompletedIds(userId)
+                _completedActivities.value = response.completedIds.toSet()
+                Log.d("MillionaireVM", "✅ Loaded ${response.completedIds.size} completed activities from backend")
+            } catch (e: Exception) {
+                Log.e("MillionaireVM", "❌ Error loading completed IDs: ${e.message}")
+            }
+        }
+    }
+
+    // ✅ Navigation reset
+    fun resetNavigationEvent() {
+        _navigationEvent.value = false
     }
 
     fun setChildAge(ageMonths: Int) {
@@ -225,9 +248,6 @@ class MillionaireViewModel @Inject constructor(
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // ✅ THE REAL PERMANENT FIX - Same logic as JourneyViewModel milestone logic
-    // ═══════════════════════════════════════════════════════════════════════════
     fun markActivityCompleted(
         userId: String,
         activityId: Int,
@@ -238,24 +258,21 @@ class MillionaireViewModel @Inject constructor(
                 _completionState.value = CompletionUiState.Loading
                 Log.d("MillionaireVM", "🚀 Completing activity $activityId...")
 
-                // ✅ Backend call (safe from cancellation)
+                // ✅ Backend call
                 withContext(Dispatchers.IO + NonCancellable) {
                     repository.completeActivity(userId, activityId)
                 }
 
                 Log.d("MillionaireVM", "✅ Backend success")
 
-                // ✅ Update local state FIRST (this drives UI unlock)
-                _completedActivities.value =
-                    _completedActivities.value + activityId
-
+                // ✅ Local state update
+                _completedActivities.value = _completedActivities.value + activityId
                 Log.d("MillionaireVM", "🔥 Local state updated")
 
-                // ✅ Emit success → UI will react
-                _completionState.value =
-                    CompletionUiState.Success("Completed")
+                // ✅ Success state
+                _completionState.value = CompletionUiState.Success("Completed")
 
-                // ✅ Reload activities (recalculate lock)
+                // ✅ Reload activities for unlock
                 if (strategyId > 0) {
                     loadActivitiesForStrategy(strategyId)
                 }
@@ -263,19 +280,18 @@ class MillionaireViewModel @Inject constructor(
                 // ✅ Refresh progress
                 loadProgress(userId)
 
-                // ❌ REMOVE navigation trigger (THIS WAS YOUR BUG)
-                // onSuccess()  ← DELETE THIS
-
-                // Optional: reset state later
+                // ✅ 1 second baad back jaao
                 delay(1000)
+                _navigationEvent.value = true  // ← Screen se bahar jaao
+
+                // ✅ Reset states
                 _completionState.value = CompletionUiState.Idle
 
             } catch (e: CancellationException) {
                 Log.e("MillionaireVM", "❌ CANCELLED → lifecycle issue")
             } catch (e: Exception) {
                 Log.e("MillionaireVM", "❌ Error: ${e.message}")
-                _completionState.value =
-                    CompletionUiState.Error(e.message ?: "Unknown error")
+                _completionState.value = CompletionUiState.Error(e.message ?: "Unknown error")
             }
         }
     }
@@ -299,4 +315,6 @@ class MillionaireViewModel @Inject constructor(
     fun isActivityCompleted(activityId: Int): Boolean {
         return _completedActivities.value.contains(activityId)
     }
+
+    fun getContext(): android.content.Context = context
 }

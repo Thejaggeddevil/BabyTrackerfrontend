@@ -179,4 +179,7 @@ class MillionaireRepository @Inject constructor(
             else -> null
         }
     }
+    suspend fun getCompletedIds(userId: String): CompletedIdsResponse {
+        return apiService.getCompletedActivityIds(userId)
+    }
 }

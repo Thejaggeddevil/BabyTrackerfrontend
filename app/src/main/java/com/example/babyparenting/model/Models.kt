@@ -103,6 +103,8 @@ sealed class UiState<out T> {
     data class Error(val message: String, val retryable: Boolean = true) : UiState<Nothing>()
 }
 
+
+
 // ── Journey Progress ──────────────────────────────────────────────────────────
 data class JourneyProgress(
     val totalMilestones: Int,

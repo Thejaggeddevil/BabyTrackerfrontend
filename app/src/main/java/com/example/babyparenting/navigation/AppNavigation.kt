@@ -28,25 +28,25 @@ import com.example.babyparenting.viewmodel.AdminViewModel
 import com.example.babyparenting.viewmodel.AuthViewModel
 import com.example.babyparenting.viewmodel.JourneyViewModel
 import com.example.babyparenting.viewmodel.ParentViewModel
-import com.example.babyparenting.ui.screens.millionaire.ActivityDetailScreenFixed
+import com.example.babyparenting.ui.screens.millionaire.ActivityDetailScreen
 import com.example.babyparenting.ui.screens.millionaire.MillionaireClubScreen
 import com.example.babyparenting.ui.screens.millionaire.StrategyDetailScreen
 import com.example.babyparenting.ui.viewmodel.MillionaireViewModel
 
 object Routes {
-    const val LOGIN         = "login"
-    const val AUTH          = "auth"
-    const val ONBOARDING    = "onboarding"
-    const val JOURNEY       = "journey"
-    const val ADVICE        = "advice"
-    const val PAYWALL       = "paywall"
-    const val SETTINGS      = "settings"
-    const val ADMIN         = "admin"
-    const val PARENT_HUB    = "parent_hub"
-    const val PARENT_DETAIL = "parent_detail"
-    const val MILLIONAIRE = "millionaire"
+    const val LOGIN           = "login"
+    const val AUTH            = "auth"
+    const val ONBOARDING      = "onboarding"
+    const val JOURNEY         = "journey"
+    const val ADVICE          = "advice"
+    const val PAYWALL         = "paywall"
+    const val SETTINGS        = "settings"
+    const val ADMIN           = "admin"
+    const val PARENT_HUB      = "parent_hub"
+    const val PARENT_DETAIL   = "parent_detail"
+    const val MILLIONAIRE     = "millionaire"
     const val STRATEGY_DETAIL = "strategy_detail"
-    const val ACTIVITY_DETAIL = "activity_detail"  // ✅ NEW ROUTE
+    const val ACTIVITY_DETAIL = "activity_detail"
 }
 
 @Composable
@@ -71,7 +71,7 @@ fun AppNavigation(
 
     NavHost(navController = navController, startDestination = startDestination) {
 
-        // ── Login — role selection ─────────────────────────────────────────────
+        // ── Login ─────────────────────────────────────────────────────────────
         composable(Routes.LOGIN) {
             LoginScreen(
                 onParentLogin = { navController.navigate(Routes.AUTH) },
@@ -87,7 +87,7 @@ fun AppNavigation(
             )
         }
 
-        // ── Auth — Email + Password Login / Register ──────────────────────────
+        // ── Auth ──────────────────────────────────────────────────────────────
         composable(Routes.AUTH) {
             AuthScreen(
                 viewModel     = authVm,
@@ -122,7 +122,7 @@ fun AppNavigation(
             )
         }
 
-        // ── Journey map ───────────────────────────────────────────────────────
+        // ── Journey Map ───────────────────────────────────────────────────────
         composable(Routes.JOURNEY) {
             val showPaywall by journeyVm.showPaywall.collectAsState()
             if (showPaywall) {
@@ -131,17 +131,17 @@ fun AppNavigation(
             }
 
             BabyJourneyScreen(
-                viewModel         = journeyVm,
-                onMilestoneTapped = { milestone ->
+                viewModel           = journeyVm,
+                onMilestoneTapped   = { milestone ->
                     journeyVm.onMilestoneTapped(milestone)
                     if (journeyVm.canAccessAdvice()) {
                         navController.navigate(Routes.ADVICE)
                     }
                 },
-                onSettingsTapped  = { navController.navigate(Routes.SETTINGS) },
+                onSettingsTapped    = { navController.navigate(Routes.SETTINGS) },
                 onMillionaireTapped = { navController.navigate(Routes.MILLIONAIRE) },
-                onParentHubTapped = { navController.navigate(Routes.PARENT_HUB) },
-                onToggleTheme     = onToggleTheme
+                onParentHubTapped   = { navController.navigate(Routes.PARENT_HUB) },
+                onToggleTheme       = onToggleTheme
             )
         }
 
@@ -202,16 +202,15 @@ fun AppNavigation(
         // ── Millionaire Club ──────────────────────────────────────────────────
         composable(Routes.MILLIONAIRE) {
             val vm: MillionaireViewModel = hiltViewModel()
-            val childAge = journeyVm.getChildAge()  // ✅ GET CHILD AGE IN MONTHS
+            val childAge = journeyVm.getChildAge()
 
-            // ✅ SET CHILD AGE IN VIEWMODEL FOR FILTERING
             LaunchedEffect(childAge) {
                 vm.setChildAge(childAge)
             }
 
             MillionaireClubScreen(
-                viewModel = vm,
-                childAge = childAge,
+                viewModel       = vm,
+                childAge        = childAge,
                 onStrategyClick = { strategyId ->
                     navController.navigate("${Routes.STRATEGY_DETAIL}/$strategyId")
                 },
@@ -225,13 +224,12 @@ fun AppNavigation(
         composable("${Routes.STRATEGY_DETAIL}/{id}") { backStackEntry ->
             val vm: MillionaireViewModel = hiltViewModel()
             val id = backStackEntry.arguments?.getString("id")?.toInt() ?: 0
-            val childAge = journeyVm.getChildAge()  // ✅ GET CHILD AGE
+            val childAge = journeyVm.getChildAge()
 
             StrategyDetailScreen(
-                strategyId = id,
+                strategyId    = id,
                 strategyTitle = "Strategy",
-                  // ✅ PASS TO SCREEN FOR AGE-BASED FILTERING
-                viewModel = vm,
+                viewModel     = vm,
                 onActivityClick = { activityId, strategyId ->
                     navController.navigate("${Routes.ACTIVITY_DETAIL}/$activityId/$strategyId")
                 },
@@ -240,18 +238,16 @@ fun AppNavigation(
         }
 
         // ── Activity Detail ───────────────────────────────────────────────────
-        // ✅ NEW ROUTE FOR ACTIVITY DETAILS
         composable("${Routes.ACTIVITY_DETAIL}/{activityId}/{strategyId}") { backStackEntry ->
             val vm: MillionaireViewModel = hiltViewModel()
             val activityId = backStackEntry.arguments?.getString("activityId")?.toInt() ?: 0
             val strategyId = backStackEntry.arguments?.getString("strategyId")?.toInt() ?: 0
 
-            ActivityDetailScreenFixed(
-                activityId = activityId,
-                strategyId = strategyId,
-                viewModel = vm,
-                onBackClick = { navController.popBackStack() },
-                onCompleted = { navController.popBackStack() }
+            ActivityDetailScreen(
+                activityId  = activityId,
+                strategyId  = strategyId,
+                viewModel   = vm,
+                onBackClick = { navController.popBackStack() }
             )
         }
 
@@ -271,7 +267,7 @@ fun AppNavigation(
             }
         }
 
-        // ── Admin panel ───────────────────────────────────────────────────────
+        // ── Admin Panel ───────────────────────────────────────────────────────
         composable(Routes.ADMIN) {
             AdminPanelScreen(
                 viewModel = adminVm,
