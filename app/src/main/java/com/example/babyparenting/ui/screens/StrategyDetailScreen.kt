@@ -16,9 +16,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -30,13 +31,15 @@ import com.example.babyparenting.ui.viewmodel.ActivitiesUiState
 import com.example.babyparenting.ui.viewmodel.MillionaireViewModel
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PALETTE HELPERS  (lavender tints used for "completed" state)
+// ─────────────────────────────────────────────────────────────────────────────
+private val LavenderBase   = Color(0xFFB39DDB)
+private val LavenderLight  = Color(0xFFF3EFFF)
+private val LavenderBorder = Color(0xFFCEC3F5)
+private val LavenderChip   = Color(0xFF9E8DD0)
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STRATEGY DETAIL SCREEN
-//
-// ✅ Activities 1–10 shown as a journey:
-//    - #1 always unlocked
-//    - #N locked until #N-1 is completed
-//    - Next locked activities are dimmed but visible
-//    - Completed ones show ✓ badge + coral border
 // ─────────────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,7 +61,7 @@ fun StrategyDetailScreen(
         val userId = com.example.babyparenting.data.local.UserManager.getUserId(
             viewModel.getContext()
         )
-        viewModel.loadCompletedActivities(userId)  // ✅ Har baar completed IDs reload karo
+        viewModel.loadCompletedActivities(userId)
     }
 
     Column(
@@ -66,7 +69,6 @@ fun StrategyDetailScreen(
             .fillMaxSize()
             .background(colors.bgMain)
     ) {
-        // ── Top Bar ──────────────────────────────────────────────────────────
         TopAppBar(
             title = {
                 Column {
@@ -95,9 +97,7 @@ fun StrategyDetailScreen(
                     )
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = colors.bgSurface
-            )
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.bgSurface)
         )
 
         when (val state = activitiesState) {
@@ -136,9 +136,7 @@ fun StrategyDetailScreen(
                         Button(
                             onClick = { viewModel.loadActivitiesForStrategy(strategyId) },
                             colors = ButtonDefaults.buttonColors(containerColor = colors.coral),
-                            modifier = Modifier
-                                .height(48.dp)
-                                .clip(RoundedCornerShape(12.dp)),
+                            modifier = Modifier.height(48.dp).clip(RoundedCornerShape(12.dp)),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
@@ -150,7 +148,6 @@ fun StrategyDetailScreen(
             }
 
             is ActivitiesUiState.Success -> {
-                // Filter + sort
                 val activities = state.activities
                     .filter { activity ->
                         if (childAge == 0) true
@@ -180,9 +177,7 @@ fun StrategyDetailScreen(
                         }
                     }
                 } else {
-                    // Header summary
                     val completedCount = activities.count { completedActivities.contains(it.id) }
-
                     ActivitiesContent(
                         activities          = activities,
                         completedActivities = completedActivities,
@@ -214,32 +209,24 @@ private fun ActivitiesContent(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
 
         // ── Header ──────────────────────────────────────────────────────────
         item {
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = colors.coral.copy(alpha = 0.1f)
-                ),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
+                colors = CardDefaults.cardColors(containerColor = colors.coral.copy(alpha = 0.1f)),
                 shape = RoundedCornerShape(14.dp),
                 border = BorderStroke(1.5.dp, colors.coral.copy(alpha = 0.2f))
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             "Your Journey",
                             fontSize = 13.sp,
@@ -268,136 +255,214 @@ private fun ActivitiesContent(
             }
         }
 
-        // ── Activities ──────────────────────────────────────────────────────
+        // ── Zigzag Activities ────────────────────────────────────────────────
         itemsIndexed(activities) { index, activity ->
             val isCompleted = completedActivities.contains(activity.id)
-            val isLocked = index > 0 && !completedActivities.contains(activities[index - 1].id)
-            val isNext = index > 0 && !isLocked && !isCompleted
-            val isFirst = index == 0
-            val isLast = index == activities.size - 1
+            val isLocked    = index > 0 && !completedActivities.contains(activities[index - 1].id)
+            val isNext      = index > 0 && !isLocked && !isCompleted
+            val isLast      = index == activities.size - 1
 
-            ActivityJourneyItem(
-                activity    = activity,
-                index       = index,
-                isCompleted = isCompleted,
-                isLocked    = isLocked,
-                isNext      = isNext,
-                isFirst     = isFirst,
-                isLast      = isLast,
-                colors      = colors,
-                onClick     = { onActivityClick(activity.id!!, strategyId) }
+            // ✅ ZIGZAG: index 0,2,4... → circle LEFT, card RIGHT
+            //            index 1,3,5... → card LEFT, circle RIGHT
+            val circleOnLeft = index % 2 == 0
+
+            ZigzagActivityItem(
+                activity      = activity,
+                index         = index,
+                isCompleted   = isCompleted,
+                isLocked      = isLocked,
+                isNext        = isNext,
+                isLast        = isLast,
+                circleOnLeft  = circleOnLeft,
+                colors        = colors,
+                onClick       = { onActivityClick(activity.id!!, strategyId) }
             )
         }
 
-        item { Spacer(Modifier.height(16.dp)) }
+        item { Spacer(Modifier.height(24.dp)) }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ACTIVITY JOURNEY ITEM
+// ZIGZAG ACTIVITY ITEM
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun ActivityJourneyItem(
+private fun ZigzagActivityItem(
     activity: Activity,
     index: Int,
     isCompleted: Boolean,
     isLocked: Boolean,
     isNext: Boolean,
-    isFirst: Boolean,
     isLast: Boolean,
+    circleOnLeft: Boolean,
     colors: AppColorScheme,
     onClick: () -> Unit
 ) {
-    val alpha = when {
-        isCompleted -> 1f
-        isNext      -> 1f
-        isLocked    -> 0.6f
-        else        -> 1f
-    }
+    val alpha = if (isLocked) 0.55f else 1f
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = if (!isLast) 0.dp else 0.dp)
-            .alpha(alpha),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            .alpha(alpha)
     ) {
-
-        // ── Left: Circle + Line ──────────────────────────────────────────────
-        Column(
-            modifier = Modifier.width(40.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(0.dp)
+        // ── Card + Circle row ────────────────────────────────────────────────
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Circle indicator
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(
-                        when {
-                            isCompleted -> colors.coral
-                            isNext      -> colors.coral.copy(alpha = 0.2f)
-                            isLocked    -> colors.textPrimary.copy(alpha = 0.08f)
-                            else        -> colors.bgSurface
-                        }
-                    )
-                    .border(
-                        width = if (isNext) 2.5.dp else 2.dp,
-                        color = when {
-                            isCompleted -> colors.coral
-                            isNext      -> colors.coral
-                            isLocked    -> colors.textPrimary.copy(alpha = 0.2f)
-                            else        -> colors.textPrimary.copy(alpha = 0.15f)
-                        },
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                when {
-                    isCompleted -> Icon(
-                        Icons.Default.Check,
-                        contentDescription = "Completed",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    else -> Text(
-                        "${index + 1}",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = if (isNext) colors.coral else colors.textPrimary.copy(alpha = 0.5f)
+            if (circleOnLeft) {
+                // index 0,2,4... → ⬤ Card
+                ActivityCircle(
+                    index       = index,
+                    isCompleted = isCompleted,
+                    isNext      = isNext,
+                    isLocked    = isLocked,
+                    colors      = colors
+                )
+                Spacer(Modifier.width(10.dp))
+                Box(modifier = Modifier.weight(1f)) {
+                    ActivityItemCard(
+                        activity    = activity,
+                        isCompleted = isCompleted,
+                        isLocked    = isLocked,
+                        isNext      = isNext,
+                        colors      = colors,
+                        onClick     = onClick
                     )
                 }
-            }
-
-            // Vertical connector line
-            if (!isLast) {
-                Box(
-                    modifier = Modifier
-                        .width(2.5.dp)
-                        .height(if ((activity.basic?.plan?.length ?: 0) > 80) 120.dp else 90.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    if (isCompleted) colors.coral else colors.coral.copy(alpha = 0.2f),
-                                    colors.coral.copy(alpha = 0.05f)
-                                )
-                            )
-                        )
+            } else {
+                // index 1,3,5... → Card ⬤
+                Box(modifier = Modifier.weight(1f)) {
+                    ActivityItemCard(
+                        activity    = activity,
+                        isCompleted = isCompleted,
+                        isLocked    = isLocked,
+                        isNext      = isNext,
+                        colors      = colors,
+                        onClick     = onClick
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                ActivityCircle(
+                    index       = index,
+                    isCompleted = isCompleted,
+                    isNext      = isNext,
+                    isLocked    = isLocked,
+                    colors      = colors
                 )
             }
         }
 
-        // ── Right: Activity card ─────────────────────────────────────────────
-        ActivityItemCard(
-            activity    = activity,
-            isCompleted = isCompleted,
-            isLocked    = isLocked,
-            isNext      = isNext,
-            alpha       = alpha,
-            colors      = colors,
-            onClick     = onClick
+        // ── Curved connector to next item (opposite side) ────────────────────
+        if (!isLast) {
+            ZigzagConnector(
+                fromLeft    = circleOnLeft,   // connector starts from current circle side
+                isCompleted = isCompleted,
+                colors      = colors
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CIRCLE INDICATOR
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ActivityCircle(
+    index: Int,
+    isCompleted: Boolean,
+    isNext: Boolean,
+    isLocked: Boolean,
+    colors: AppColorScheme
+) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(
+                when {
+                    isCompleted -> LavenderBase.copy(alpha = 0.25f)
+                    isNext      -> colors.coral.copy(alpha = 0.2f)
+                    isLocked    -> colors.textPrimary.copy(alpha = 0.08f)
+                    else        -> colors.bgSurface
+                }
+            )
+            .border(
+                width = if (isNext || isCompleted) 2.5.dp else 2.dp,
+                color = when {
+                    isCompleted -> LavenderBorder
+                    isNext      -> colors.coral
+                    isLocked    -> colors.textPrimary.copy(alpha = 0.2f)
+                    else        -> colors.textPrimary.copy(alpha = 0.15f)
+                },
+                shape = CircleShape
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        when {
+            isCompleted -> Icon(
+                Icons.Default.Check,
+                contentDescription = "Completed",
+                tint = LavenderChip,
+                modifier = Modifier.size(20.dp)
+            )
+            else -> Text(
+                "${index + 1}",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = if (isNext) colors.coral else colors.textPrimary.copy(alpha = 0.5f)
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ZIGZAG CONNECTOR  — curved dashed line from one circle to the next
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ZigzagConnector(
+    fromLeft: Boolean,    // true = current circle is on left → next circle on right
+    isCompleted: Boolean,
+    colors: AppColorScheme
+) {
+    val lineColor = if (isCompleted) LavenderBorder.copy(alpha = 0.7f)
+    else colors.coral.copy(alpha = 0.3f)
+
+    val circleSize = 44.dp   // must match ActivityCircle size
+
+    androidx.compose.foundation.Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+    ) {
+        val circleRadius = circleSize.toPx() / 2f
+
+        // Circle center X — circle sits at very left or very right of the row
+        val startX = if (fromLeft) circleRadius else size.width - circleRadius
+        val endX   = if (fromLeft) size.width - circleRadius else circleRadius
+
+        val startY = 0f
+        val endY   = size.height
+
+        val path = Path().apply {
+            moveTo(startX, startY)
+            cubicTo(
+                startX, startY + size.height * 0.5f,   // control point 1
+                endX,   endY   - size.height * 0.5f,   // control point 2
+                endX,   endY
+            )
+        }
+
+        drawPath(
+            path  = path,
+            color = lineColor,
+            style = Stroke(
+                width      = 2.5.dp.toPx(),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 7f), 0f)
+            )
         )
     }
 }
@@ -412,28 +477,26 @@ private fun ActivityItemCard(
     isCompleted: Boolean,
     isLocked: Boolean,
     isNext: Boolean,
-    alpha: Float,
     colors: AppColorScheme,
     onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp)
-            .alpha(alpha)
             .clip(RoundedCornerShape(14.dp))
             .clickable(enabled = !isLocked, onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = when {
-                isCompleted -> colors.coral.copy(alpha = 0.08f)
-                isNext      -> colors.bgSurface
+                isCompleted -> LavenderLight
                 else        -> colors.bgSurface
             }
         ),
         shape = RoundedCornerShape(14.dp),
-        elevation = CardDefaults.cardElevation(if (isNext) 3.5.dp else 1.5.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isNext) 3.5.dp else 1.5.dp
+        ),
         border = when {
-            isCompleted -> BorderStroke(1.5.dp, colors.coral.copy(alpha = 0.5f))
+            isCompleted -> BorderStroke(1.5.dp, LavenderBorder)
             isNext      -> BorderStroke(2.dp, colors.coral.copy(alpha = 0.4f))
             else        -> null
         }
@@ -441,8 +504,8 @@ private fun ActivityItemCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Header row
             Row(
@@ -452,17 +515,15 @@ private fun ActivityItemCard(
             ) {
                 Text(
                     text = activity.title ?: "Activity ${activity.id}",
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = colors.textPrimary,
                     modifier = Modifier.weight(1f),
                     maxLines = 2,
-                    lineHeight = 18.sp
+                    lineHeight = 17.sp
                 )
-
-                // Status chip
                 when {
-                    isCompleted -> StatusChip("✓ Done", colors.coral, colors)
+                    isCompleted -> StatusChip("✓ Done", LavenderChip, colors)
                     isNext      -> StatusChip("▶ Next", colors.coral.copy(alpha = 0.8f), colors)
                     isLocked    -> StatusChip("🔒", colors.textPrimary.copy(alpha = 0.35f), colors)
                 }
@@ -473,11 +534,11 @@ private fun ActivityItemCard(
                 if (plan.isNotBlank()) {
                     Text(
                         text = plan,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = colors.textPrimary.copy(alpha = 0.65f),
+                        color = colors.textPrimary.copy(alpha = 0.6f),
                         maxLines = 2,
-                        lineHeight = 16.sp
+                        lineHeight = 15.sp
                     )
                 }
             }
@@ -485,22 +546,22 @@ private fun ActivityItemCard(
             // Meta row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 activity.meta?.timeMinutes?.let {
                     MiniChip("⏱️ ${it}m", colors)
                 }
                 activity.meta?.materials?.size?.let { count ->
-                    if (count > 0) MiniChip("🧩 $count items", colors)
+                    if (count > 0) MiniChip("🧩 $count", colors)
                 }
                 Spacer(Modifier.weight(1f))
-                // Level
                 Text(
                     "L${activity.level}",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = colors.coral.copy(alpha = 0.7f)
+                    color = if (isCompleted) LavenderChip.copy(alpha = 0.7f)
+                    else colors.coral.copy(alpha = 0.7f)
                 )
             }
 
@@ -510,10 +571,10 @@ private fun ActivityItemCard(
                 enabled = !isLocked,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(40.dp),
+                    .height(38.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = when {
-                        isCompleted -> colors.textPrimary.copy(alpha = 0.08f)
+                        isCompleted -> LavenderBase.copy(alpha = 0.18f)
                         else        -> colors.coral
                     },
                     disabledContainerColor = colors.textPrimary.copy(alpha = 0.08f)
@@ -536,20 +597,20 @@ private fun ActivityItemCard(
                             isLocked    -> "🔒 Complete previous"
                             else        -> "Start Activity"
                         },
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = when {
-                            isCompleted -> colors.textPrimary.copy(alpha = 0.4f)
+                            isCompleted -> LavenderChip
                             isLocked    -> colors.textPrimary.copy(alpha = 0.35f)
                             else        -> Color.White
                         }
                     )
                     if (!isCompleted && !isLocked) {
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(4.dp))
                         Icon(
                             Icons.Default.ChevronRight,
                             null,
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(14.dp),
                             tint = Color.White
                         )
                     }
@@ -559,12 +620,16 @@ private fun ActivityItemCard(
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER COMPOSABLES
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
 private fun StatusChip(text: String, color: Color, colors: AppColorScheme) {
     Surface(
         color = color.copy(alpha = 0.14f),
         modifier = Modifier
-            .padding(start = 6.dp)
+            .padding(start = 4.dp)
             .clip(RoundedCornerShape(8.dp))
             .border(0.8.dp, color.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
     ) {
@@ -573,7 +638,7 @@ private fun StatusChip(text: String, color: Color, colors: AppColorScheme) {
             fontSize = 10.sp,
             fontWeight = FontWeight.ExtraBold,
             color = color,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
         )
     }
 }
@@ -588,10 +653,10 @@ private fun MiniChip(text: String, colors: AppColorScheme) {
     ) {
         Text(
             text = text,
-            fontSize = 11.sp,
+            fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,
             color = colors.textPrimary.copy(alpha = 0.6f),
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
         )
     }
 }

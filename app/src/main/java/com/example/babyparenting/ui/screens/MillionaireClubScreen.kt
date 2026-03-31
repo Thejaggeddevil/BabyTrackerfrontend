@@ -516,6 +516,10 @@ private fun StrategyJourneyItem(
     val isLocked     = strategy.is_locked
     val isLeft       = index % 2 == 0
 
+    // Golden colors for completed state
+    val goldenColor      = Color(0xFFFFB830)
+    val goldenLightColor = Color(0xFFFFF3D0)
+
     // 3-column: [left card slot] [44dp center node] [right card slot]
     Row(
         modifier = Modifier
@@ -530,12 +534,14 @@ private fun StrategyJourneyItem(
         ) {
             if (isLeft) {
                 StrategyCard(
-                    strategy    = strategy,
-                    isCompleted = isCompleted,
-                    hasProgress = hasProgress,
-                    isLocked    = isLocked,
-                    colors      = colors,
-                    onClick     = { if (!isLocked) onClick() }
+                    strategy       = strategy,
+                    isCompleted    = isCompleted,
+                    hasProgress    = hasProgress,
+                    isLocked       = isLocked,
+                    colors         = colors,
+                    goldenColor    = goldenColor,
+                    goldenLightColor = goldenLightColor,
+                    onClick        = { if (!isLocked) onClick() }
                 )
             }
         }
@@ -547,6 +553,14 @@ private fun StrategyJourneyItem(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.width(44.dp)
         ) {
+            // Animated shimmer for completed node
+            val infiniteTransition = rememberInfiniteTransition()
+            val shimmerAlpha by infiniteTransition.animateFloat(
+                initialValue = 0.7f,
+                targetValue  = 1f,
+                animationSpec = infiniteRepeatable(tween(900, easing = EaseInOutSine), RepeatMode.Reverse)
+            )
+
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -555,16 +569,16 @@ private fun StrategyJourneyItem(
                     .background(
                         when {
                             isLocked    -> colors.bgSurface
-                            isCompleted -> colors.coral
+                            isCompleted -> goldenColor.copy(alpha = shimmerAlpha)  // ✨ Golden animated
                             hasProgress -> colors.coral.copy(alpha = 0.25f)
                             else        -> colors.bgSurface
                         }
                     )
                     .border(
-                        width = if (isLocked) 1.5.dp else 2.dp,
+                        width = if (isLocked) 1.5.dp else 2.5.dp,
                         color = when {
                             isLocked    -> colors.textPrimary.copy(alpha = 0.15f)
-                            isCompleted -> colors.coral
+                            isCompleted -> goldenColor                              // ✨ Golden border
                             hasProgress -> colors.coral.copy(alpha = 0.6f)
                             else        -> colors.coral.copy(alpha = 0.35f)
                         },
@@ -578,11 +592,11 @@ private fun StrategyJourneyItem(
                         tint = colors.textPrimary.copy(alpha = 0.3f),
                         modifier = Modifier.size(16.dp)
                     )
-                    isCompleted -> Icon(
-                        Icons.Default.Check,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
+                    isCompleted -> Text(
+                        "✓",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White
                     )
                     else -> Text(
                         text = "${index + 1}",
@@ -602,7 +616,7 @@ private fun StrategyJourneyItem(
                         .background(
                             Brush.verticalGradient(
                                 listOf(
-                                    if (isCompleted) colors.coral
+                                    if (isCompleted) goldenColor.copy(alpha = 0.6f)
                                     else colors.coral.copy(alpha = 0.25f),
                                     colors.coral.copy(alpha = 0.06f)
                                 )
@@ -621,12 +635,14 @@ private fun StrategyJourneyItem(
         ) {
             if (!isLeft) {
                 StrategyCard(
-                    strategy    = strategy,
-                    isCompleted = isCompleted,
-                    hasProgress = hasProgress,
-                    isLocked    = isLocked,
-                    colors      = colors,
-                    onClick     = { if (!isLocked) onClick() }
+                    strategy       = strategy,
+                    isCompleted    = isCompleted,
+                    hasProgress    = hasProgress,
+                    isLocked       = isLocked,
+                    colors         = colors,
+                    goldenColor    = goldenColor,
+                    goldenLightColor = goldenLightColor,
+                    onClick        = { if (!isLocked) onClick() }
                 )
             }
         }
@@ -640,6 +656,8 @@ private fun StrategyCard(
     hasProgress: Boolean,
     isLocked: Boolean,
     colors: AppColorScheme,
+    goldenColor: Color,
+    goldenLightColor: Color,
     onClick: () -> Unit
 ) {
     val cardAlpha = if (isLocked) 0.45f else 1f
@@ -652,102 +670,151 @@ private fun StrategyCard(
         colors = CardDefaults.cardColors(
             containerColor = when {
                 isLocked    -> colors.bgSurface
-                isCompleted -> colors.coral.copy(alpha = 0.1f)
+                isCompleted -> goldenLightColor           // ✨ Warm golden cream
                 hasProgress -> colors.bgSurface
                 else        -> colors.bgSurface
             }
         ),
-        elevation = CardDefaults.cardElevation(if (isLocked) 0.dp else 2.dp),
+        elevation = CardDefaults.cardElevation(if (isLocked) 0.dp else if (isCompleted) 4.dp else 2.dp),
         border = when {
             isLocked    -> BorderStroke(1.dp, colors.textPrimary.copy(alpha = 0.1f))
-            isCompleted -> BorderStroke(1.5.dp, colors.coral.copy(alpha = 0.4f))
+            isCompleted -> BorderStroke(2.dp, goldenColor.copy(alpha = 0.7f))     // ✨ Golden border
             hasProgress -> BorderStroke(1.dp, colors.coral.copy(alpha = 0.25f))
             else        -> BorderStroke(1.dp, colors.textPrimary.copy(alpha = 0.08f))
         },
         shape = RoundedCornerShape(12.dp)
     ) {
-        Column(
+        // Completed card gets a subtle golden gradient background
+        Box(
             modifier = Modifier
-                .padding(10.dp)
-                .alpha(cardAlpha),
-            verticalArrangement = Arrangement.spacedBy(5.dp)
+                .fillMaxWidth()
+                .then(
+                    if (isCompleted) Modifier.background(
+                        Brush.verticalGradient(
+                            listOf(
+                                goldenColor.copy(alpha = 0.08f),
+                                goldenLightColor
+                            )
+                        )
+                    ) else Modifier
+                )
         ) {
-            // Title row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+            Column(
+                modifier = Modifier
+                    .padding(10.dp)
+                    .alpha(cardAlpha),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
-                Text(
-                    text = strategy.title,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isLocked) colors.textPrimary.copy(alpha = 0.4f)
-                    else colors.textPrimary,
-                    maxLines = 3,
-                    lineHeight = 15.sp,
-                    modifier = Modifier.weight(1f)
-                )
-                if (!isLocked) {
-                    Icon(
-                        Icons.Default.ChevronRight,
-                        contentDescription = null,
-                        tint = colors.coral.copy(alpha = 0.5f),
-                        modifier = Modifier.size(14.dp).padding(top = 2.dp)
-                    )
-                }
-            }
 
-            if (strategy.description.isNotBlank() && !isLocked) {
-                Text(
-                    text = strategy.description,
-                    fontSize = 10.sp,
-                    color = colors.textPrimary.copy(alpha = 0.5f),
-                    maxLines = 2,
-                    lineHeight = 14.sp
-                )
-            }
-
-            if (isLocked) {
-                Text(
-                    "Complete previous to unlock",
-                    fontSize = 9.sp,
-                    color = colors.textPrimary.copy(alpha = 0.35f),
-                    lineHeight = 13.sp
-                )
-            } else {
-                // Progress count + age
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "${strategy.completed_count}/${strategy.total_activities}",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (isCompleted) Color(0xFF4CAF50) else colors.coral
-                    )
-                    if (strategy.age_max > 0) {
+                // ✨ COMPLETED BADGE — shown only for completed cards
+                if (isCompleted) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(goldenColor.copy(alpha = 0.18f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text("🏆", fontSize = 9.sp)
                         Text(
-                            "Age ${strategy.age_min}–${strategy.age_max}",
-                            fontSize = 9.sp,
-                            color = colors.textPrimary.copy(alpha = 0.35f)
+                            "COMPLETED!",
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFFB8860B)   // dark golden
                         )
                     }
                 }
 
-                // Progress bar — only shown when there are real activities
-                if (strategy.total_activities > 0) {
-                    LinearProgressIndicator(
-                        progress = (strategy.completed_count.toFloat() / strategy.total_activities).coerceIn(0f, 1f),
-                        modifier   = Modifier
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .clip(RoundedCornerShape(2.dp)),
-                        color      = if (isCompleted) Color(0xFF4CAF50) else colors.coral,
-                        trackColor = colors.coral.copy(alpha = 0.12f)
+                // Title row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        text = strategy.title,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = when {
+                            isLocked    -> colors.textPrimary.copy(alpha = 0.4f)
+                            isCompleted -> Color(0xFF7A5C00)   // ✨ Rich golden-brown text
+                            else        -> colors.textPrimary
+                        },
+                        maxLines = 3,
+                        lineHeight = 15.sp,
+                        modifier = Modifier.weight(1f)
                     )
+                    if (!isLocked) {
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = if (isCompleted) goldenColor else colors.coral.copy(alpha = 0.5f),
+                            modifier = Modifier.size(14.dp).padding(top = 2.dp)
+                        )
+                    }
+                }
+
+                if (strategy.description.isNotBlank() && !isLocked) {
+                    Text(
+                        text = strategy.description,
+                        fontSize = 10.sp,
+                        color = if (isCompleted)
+                            Color(0xFF7A5C00).copy(alpha = 0.6f)  // ✨ golden-brown description
+                        else
+                            colors.textPrimary.copy(alpha = 0.5f),
+                        maxLines = 2,
+                        lineHeight = 14.sp
+                    )
+                }
+
+                if (isLocked) {
+                    Text(
+                        "Complete previous to unlock",
+                        fontSize = 9.sp,
+                        color = colors.textPrimary.copy(alpha = 0.35f),
+                        lineHeight = 13.sp
+                    )
+                } else {
+                    // Progress count + age
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "${strategy.completed_count}/${strategy.total_activities}",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isCompleted) goldenColor else colors.coral   // ✨ golden count
+                        )
+                        if (strategy.age_max > 0) {
+                            Text(
+                                "Age ${strategy.age_min}–${strategy.age_max}",
+                                fontSize = 9.sp,
+                                color = if (isCompleted)
+                                    Color(0xFF7A5C00).copy(alpha = 0.4f)
+                                else
+                                    colors.textPrimary.copy(alpha = 0.35f)
+                            )
+                        }
+                    }
+
+                    // Progress bar — only shown when there are real activities
+                    if (strategy.total_activities > 0) {
+                        LinearProgressIndicator(
+                            progress = (strategy.completed_count.toFloat() / strategy.total_activities).coerceIn(0f, 1f),
+                            modifier   = Modifier
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color      = if (isCompleted) goldenColor else colors.coral,   // ✨ golden bar
+                            trackColor = if (isCompleted)
+                                goldenColor.copy(alpha = 0.2f)
+                            else
+                                colors.coral.copy(alpha = 0.12f)
+                        )
+                    }
                 }
             }
         }
